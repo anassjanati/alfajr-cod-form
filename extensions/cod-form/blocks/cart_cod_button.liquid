@@ -1,0 +1,315 @@
+<div class="alfajr-cart-cod-wrapper"> 
+
+  <button id="alfajr-open-cod" class="alfajr-cart-cod-btn" type="button">
+    Commander en paiement à la livraison
+  </button>
+
+  <div class="alfajr-modal" id="alfajr-modal">
+    <div class="alfajr-modal-content">
+      <div class="alfajr-close" id="alfajr-close">✕</div>
+
+      <h2>Commande rapide</h2>
+
+      <div id="alfajr-cart-products"></div>
+
+      <form id="alfajr-cart-form">
+        <input type="hidden" name="shop" value="{{ shop.myshopify_domain }}">
+        <input type="text" name="full_name" placeholder="Nom complet" required>
+        <input type="tel" name="phone" placeholder="Téléphone" required>
+        <input type="text" name="city" placeholder="Ville" required>
+        <textarea name="address" placeholder="Adresse complète" required></textarea>
+
+        <div id="alfajr-cart-summary" class="alfajr-cart-summary">
+          <div class="alfajr-summary-line">
+            <span>Sous-total</span>
+            <strong id="alfajr-cart-subtotal">0 DH</strong>
+          </div>
+
+          <div class="alfajr-summary-line">
+            <span>Livraison</span>
+            <strong id="alfajr-cart-shipping">35 DH</strong>
+          </div>
+
+          <div class="alfajr-summary-line alfajr-summary-total">
+            <span>Total</span>
+            <strong id="alfajr-cart-total">0 DH</strong>
+          </div>
+        </div>
+
+        <button type="submit" id="alfajr-submit-cart">
+          Commander maintenant
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<style>
+  .alfajr-cart-cod-btn {
+    width: 100%;
+    background: #0D47C7;
+    color: white;
+    border: none;
+    padding: 15px;
+    border-radius: 14px;
+    font-size: 16px;
+    font-weight: 800;
+    cursor: pointer;
+    margin-bottom: 10px;
+  }
+
+  .alfajr-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.6);
+    display: none;
+    z-index: 99999;
+    padding: 20px;
+  }
+
+  .alfajr-modal-content {
+    max-width: 600px;
+    background: white;
+    margin: 40px auto 0;
+    border-radius: 22px;
+    padding: 22px;
+    position: relative;
+    max-height: 85vh;
+    overflow: auto;
+  }
+
+  .alfajr-close {
+    position: absolute;
+    right: 18px;
+    top: 16px;
+    cursor: pointer;
+    font-size: 24px;
+    font-weight: 900;
+  }
+
+  #alfajr-cart-products {
+    margin-bottom: 16px;
+  }
+
+  .alfajr-product-item {
+    display: flex;
+    gap: 10px;
+    padding: 10px;
+    border: 1px solid #eee;
+    border-radius: 14px;
+    margin-bottom: 10px;
+    align-items: center;
+  }
+
+  .alfajr-product-item img {
+    width: 60px;
+    height: 60px;
+    object-fit: cover;
+    border-radius: 10px;
+  }
+
+  #alfajr-cart-form {
+    display: grid;
+    gap: 10px;
+  }
+
+  #alfajr-cart-form input,
+  #alfajr-cart-form textarea {
+    padding: 13px;
+    border: 1px solid #ddd;
+    border-radius: 12px;
+    width: 100%;
+  }
+
+  .alfajr-cart-summary {
+    background: #f8f9fb;
+    border: 1px solid #eceff5;
+    border-radius: 14px;
+    padding: 14px;
+  }
+
+  .alfajr-summary-line {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+
+  .alfajr-summary-total {
+    border-top: 1px solid #ddd;
+    padding-top: 8px;
+    margin-bottom: 0;
+    font-size: 18px;
+    font-weight: 900;
+  }
+
+  #alfajr-submit-cart {
+    background: #0D47C7;
+    color: white;
+    border: none;
+    padding: 15px;
+    border-radius: 14px;
+    font-weight: 800;
+    cursor: pointer;
+  }
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const modal = document.getElementById("alfajr-modal");
+  const openBtn = document.getElementById("alfajr-open-cod");
+  const closeBtn = document.getElementById("alfajr-close");
+  const form = document.getElementById("alfajr-cart-form");
+  const container = document.getElementById("alfajr-cart-products");
+  const subtotalEl = document.getElementById("alfajr-cart-subtotal");
+  const shippingEl = document.getElementById("alfajr-cart-shipping");
+  const totalEl = document.getElementById("alfajr-cart-total");
+  const btn = document.getElementById("alfajr-submit-cart");
+
+  if (!modal || !openBtn || !form) return;
+
+  function getShippingFee(city) {
+    const normalizedCity = String(city || "")
+      .toLowerCase()
+      .trim()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+
+    if (
+      normalizedCity.includes("fes") ||
+      normalizedCity.includes("فاس")
+    ) {
+      return 20;
+    }
+
+    return 35;
+  }
+
+  function updateSummary(cart) {
+    const subtotal = Number(cart.total_price || 0) / 100;
+    const shipping = getShippingFee(form.city?.value || "");
+    const total = subtotal + shipping;
+
+    subtotalEl.textContent = subtotal.toFixed(2) + " DH";
+    shippingEl.textContent = shipping.toFixed(2) + " DH";
+    totalEl.textContent = total.toFixed(2) + " DH";
+
+    return { subtotal, shipping, total };
+  }
+
+  async function loadCart() {
+    const cart = await fetch("/cart.js").then(r => r.json());
+
+    container.innerHTML = "";
+
+    cart.items.forEach(item => {
+      container.innerHTML += `
+        <div class="alfajr-product-item">
+          <img src="${item.image || ""}" alt="">
+          <div>
+            <strong>${item.product_title}</strong>
+            <br>
+            Qté: ${item.quantity}
+          </div>
+        </div>
+      `;
+    });
+
+    updateSummary(cart);
+
+    return cart;
+  }
+
+  openBtn.onclick = async () => {
+    modal.style.display = "block";
+    await loadCart();
+  };
+
+  closeBtn.onclick = () => {
+    modal.style.display = "none";
+  };
+
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) {
+      modal.style.display = "none";
+    }
+  });
+
+  form.city?.addEventListener("input", async () => {
+    const cart = await fetch("/cart.js").then(r => r.json());
+    updateSummary(cart);
+  });
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const cart = await fetch("/cart.js").then(r => r.json());
+    const totals = updateSummary(cart);
+
+    const data = {
+      shop: form.shop.value,
+      fullName: form.full_name.value,
+      phone: form.phone.value,
+      city: form.city.value,
+      address: form.address.value,
+      shippingFee: totals.shipping,
+      subtotal: totals.subtotal,
+      total: totals.total,
+      items: cart.items.map(i => ({
+        variantId: i.variant_id,
+        quantity: i.quantity
+      }))
+    };
+
+    const idempotencyKey = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    try {
+      btn.disabled = true;
+      btn.innerHTML = "Envoi...";
+
+      const response = await fetch("/apps/alfajr-cod/api/cod", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "idempotency-key": idempotencyKey
+        },
+        body: JSON.stringify(data)
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        sessionStorage.setItem("alfajr_cod_order", JSON.stringify({
+          productTitle: cart.item_count + " article(s)",
+          productImage: cart.items[0]?.image || "",
+          fullName: data.fullName,
+          phone: data.phone,
+          city: data.city,
+          address: data.address,
+          quantity: cart.item_count,
+          shippingFee: data.shippingFee,
+          total: data.total
+        }));
+
+        window.location.href = "/pages/merci-commande";
+      } else {
+        alert("Erreur: commande non envoyée");
+        btn.disabled = false;
+        btn.innerHTML = "Commander maintenant";
+      }
+    } catch (err) {
+      console.log(err);
+      alert("Erreur de connexion");
+      btn.disabled = false;
+      btn.innerHTML = "Commander maintenant";
+    }
+  });
+});
+</script>
+
+{% schema %}
+{
+  "name": "AL FAJR Cart COD",
+  "target": "section",
+  "settings": []
+}
+{% endschema %}

@@ -1,0 +1,208 @@
+<section class="alfajr-thank-page" id="alfajr-thank-page">
+  <div class="alfajr-thank-card">
+    <div class="alfajr-success-icon">✓</div>
+
+    <h1>Merci pour votre commande</h1>
+    <p class="alfajr-subtitle">
+      Votre commande a bien été reçue. Notre équipe vous contactera bientôt pour la confirmation.
+    </p>
+
+    <div class="alfajr-product-summary">
+      <img id="alfajr-thank-image" src="" alt="">
+      <div>
+        <h3 id="alfajr-thank-product">Produit commandé</h3>
+        <p>Quantité: <strong id="alfajr-thank-quantity">1</strong></p>
+      </div>
+    </div>
+
+    <div class="alfajr-info-box">
+      <p><strong>Nom:</strong> <span id="alfajr-thank-name"></span></p>
+      <p><strong>Téléphone:</strong> <span id="alfajr-thank-phone"></span></p>
+      <p><strong>Ville:</strong> <span id="alfajr-thank-city"></span></p>
+      <p><strong>Adresse:</strong> <span id="alfajr-thank-address"></span></p>
+    </div>
+
+    <div class="alfajr-upsell-box">
+      <h2>Ajoutez un autre produit à votre commande</h2>
+      <p>
+        Vous pouvez profiter de la même livraison sans payer une deuxième fois.
+      </p>
+      <a href="/collections/all" class="alfajr-upsell-btn">
+        Voir plus de produits
+      </a>
+    </div>
+
+    <a href="/" class="alfajr-home-btn">Retour à l’accueil</a>
+  </div>
+</section>
+
+<style>
+  .alfajr-thank-page {
+    background: linear-gradient(180deg, #ffffff 0%, #f6f8ff 100%);
+    padding: 40px 16px;
+  }
+
+  .alfajr-thank-card {
+    max-width: 720px;
+    margin: 0 auto;
+    background: #ffffff;
+    border-radius: 24px;
+    padding: 28px;
+    box-shadow: 0 18px 50px rgba(0,0,0,0.08);
+    text-align: center;
+  }
+
+  .alfajr-success-icon {
+    width: 68px;
+    height: 68px;
+    border-radius: 50%;
+    background: #0D47C7;
+    color: white;
+    display: grid;
+    place-items: center;
+    font-size: 36px;
+    font-weight: 900;
+    margin: 0 auto 16px;
+  }
+
+  .alfajr-thank-card h1 {
+    margin: 0;
+    font-size: 30px;
+    font-weight: 900;
+    color: #111;
+  }
+
+  .alfajr-subtitle {
+    color: #555;
+    margin: 12px auto 22px;
+    max-width: 520px;
+    line-height: 1.6;
+  }
+
+  .alfajr-product-summary {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    background: #f7f9ff;
+    border: 1px solid #e5ebff;
+    border-radius: 18px;
+    padding: 14px;
+    text-align: left;
+    margin: 18px 0;
+  }
+
+  .alfajr-product-summary img {
+    width: 82px;
+    height: 82px;
+    object-fit: cover;
+    border-radius: 14px;
+    background: #fff;
+  }
+
+  .alfajr-product-summary h3 {
+    margin: 0 0 6px;
+    font-size: 17px;
+    font-weight: 800;
+  }
+
+  .alfajr-product-summary p {
+    margin: 0;
+    color: #555;
+  }
+
+  .alfajr-info-box {
+    text-align: left;
+    border: 1px solid #eee;
+    border-radius: 18px;
+    padding: 16px;
+    margin: 18px 0;
+    background: #fff;
+  }
+
+  .alfajr-info-box p {
+    margin: 8px 0;
+    color: #333;
+  }
+
+  .alfajr-upsell-box {
+    background: linear-gradient(135deg, #0D47C7, #123C91);
+    color: #fff;
+    border-radius: 20px;
+    padding: 22px;
+    margin: 20px 0;
+  }
+
+  .alfajr-upsell-box h2 {
+    margin: 0 0 8px;
+    font-size: 22px;
+    font-weight: 900;
+  }
+
+  .alfajr-upsell-box p {
+    margin: 0 0 16px;
+    opacity: .9;
+  }
+
+  .alfajr-upsell-btn,
+  .alfajr-home-btn {
+    display: inline-block;
+    text-decoration: none;
+    border-radius: 14px;
+    padding: 13px 18px;
+    font-weight: 800;
+  }
+
+  .alfajr-upsell-btn {
+    background: #fff;
+    color: #0D47C7;
+  }
+
+  .alfajr-home-btn {
+    background: #f1f3f7;
+    color: #111;
+    margin-top: 8px;
+  }
+
+  @media(max-width: 600px) {
+    .alfajr-product-summary {
+      align-items: flex-start;
+    }
+
+    .alfajr-thank-card {
+      padding: 22px;
+    }
+
+    .alfajr-thank-card h1 {
+      font-size: 25px;
+    }
+  }
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const saved = sessionStorage.getItem("alfajr_cod_order");
+
+  if (!saved) return;
+
+  const data = JSON.parse(saved);
+
+  document.getElementById("alfajr-thank-product").textContent = data.productTitle || "Produit commandé";
+  document.getElementById("alfajr-thank-quantity").textContent = data.quantity || "1";
+  document.getElementById("alfajr-thank-name").textContent = data.fullName || "";
+  document.getElementById("alfajr-thank-phone").textContent = data.phone || "";
+  document.getElementById("alfajr-thank-city").textContent = data.city || "";
+  document.getElementById("alfajr-thank-address").textContent = data.address || "";
+
+  if (data.productImage) {
+    document.getElementById("alfajr-thank-image").src = data.productImage;
+  }
+});
+</script>
+
+{% schema %}
+{
+  "name": "AL FAJR Thank You",
+  "target": "section",
+  "settings": []
+}
+{% endschema %}

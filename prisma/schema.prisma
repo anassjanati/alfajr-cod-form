@@ -1,0 +1,122 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Note that some adapters may set a maximum length for the String type by default, please ensure your strings are long
+// enough when changing adapters.
+// See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Session {
+  id            String    @id
+  shop          String
+  state         String
+  isOnline      Boolean   @default(false)
+  scope         String?
+  expires       DateTime?
+  accessToken   String
+  userId        BigInt?
+  firstName     String?
+  lastName      String?
+  email         String?
+  accountOwner  Boolean   @default(false)
+  locale        String?
+  collaborator  Boolean?  @default(false)
+  emailVerified Boolean?  @default(false)
+  refreshToken        String?
+  refreshTokenExpires DateTime?
+}
+model CodSettings {
+  id                Int      @id @default(autoincrement())
+  shop              String   @unique
+
+  buttonText        String   @default("Commander en paiement à la livraison")
+  buttonColor       String   @default("#0D47C7")
+  buttonTextColor   String   @default("#FFFFFF")
+  borderRadius      Int      @default(14)
+
+  popupTitle        String   @default("Commande rapide")
+  successPageUrl    String   @default("/pages/merci-commande")
+
+  showFullName      Boolean  @default(true)
+  showPhone         Boolean  @default(true)
+  showCity          Boolean  @default(true)
+  showAddress       Boolean  @default(true)
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model IdempotentRequest {
+  id               String   @id @default(cuid())
+  idempotencyKey   String   @unique
+  shop             String
+  status           String   @default("processing")
+  response         Json?
+  createdAt        DateTime @default(now())
+  expiresAt        DateTime
+
+  @@index([shop])
+  @@index([createdAt])
+}
+
+model ColorTheme {
+  id            Int      @id @default(autoincrement())
+  shop          String
+  name          String
+  isPremium     Boolean  @default(true)
+  buttonColor   String
+  textColor     String
+  accentColor   String
+  bgColor       String
+  createdAt     DateTime @default(now())
+
+  @@unique([shop, name])
+  @@index([shop])
+}
+
+model ShippingZone {
+  id            Int      @id @default(autoincrement())
+  shop          String
+  zone          String
+  fee           Float
+  estimatedDays Int?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  @@unique([shop, zone])
+  @@index([shop])
+}
+
+model CodOrder {
+  id             String   @id @default(cuid())
+  shop           String
+  shopifyOrderId String?
+  customerName   String
+  customerPhone  String
+  city           String
+  shippingFee    Float
+  total          Float
+  status         String   @default("pending")
+  createdAt      DateTime @default(now())
+
+  @@index([shop])
+  @@index([createdAt])
+}
+
+model EmailNotification {
+  id            Int      @id @default(autoincrement())
+  shop          String   @unique
+  enabled       Boolean  @default(true)
+  senderEmail   String?
+  sendToMerchant Boolean @default(true)
+  sendToCustomer Boolean @default(true)
+  createdAt     DateTime @default(now())
+}
