@@ -18,34 +18,37 @@ export default function App() {
   return (
     <div className={styles.index}>
       <div className={styles.content}>
-        <h1 className={styles.heading}>A short heading about [your app]</h1>
+        <h1 className={styles.heading}>AL FAJR COD Form</h1>
         <p className={styles.text}>
-          A tagline about [your app] that describes your value proposition.
+          Gérez vos commandes en paiement à la livraison depuis une interface simple et professionnelle.
         </p>
+
         {showForm && (
           <Form className={styles.form} method="post" action="/auth/login">
             <label className={styles.label}>
               <span>Shop domain</span>
-              <input className={styles.input} type="text" name="shop" />
-              <span>e.g: my-shop-domain.myshopify.com</span>
+              <input
+                className={styles.input}
+                type="text"
+                name="shop"
+                placeholder="alfajr-wex5ddvj.myshopify.com"
+              />
             </label>
             <button className={styles.button} type="submit">
               Log in
             </button>
           </Form>
         )}
+
         <ul className={styles.list}>
           <li>
-            <strong>Product feature</strong>. Some detail about your feature and
-            its benefit to your customer.
+            <strong>COD Orders</strong>. Créez des commandes Shopify depuis un formulaire rapide.
           </li>
           <li>
-            <strong>Product feature</strong>. Some detail about your feature and
-            its benefit to your customer.
+            <strong>Personnalisation</strong>. Changez les couleurs, textes et champs du formulaire.
           </li>
           <li>
-            <strong>Product feature</strong>. Some detail about your feature and
-            its benefit to your customer.
+            <strong>Livraison Maroc</strong>. Frais automatiques selon la ville du client.
           </li>
         </ul>
       </div>

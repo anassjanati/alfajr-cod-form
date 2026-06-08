@@ -2,7 +2,7 @@
 
 client_id = "a185cb7b5ece9994eabac4024f278a14"
 name = "alfajr-cod-form"
-application_url = "https://shirt-charms-cubic-souls.trycloudflare.com"
+application_url = "https://cod.al-fajr.ma"
 embedded = true
 
 [build]
@@ -21,15 +21,14 @@ api_version = "2026-07"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "read_orders,write_metaobject_definitions,write_metaobjects,write_orders,write_products"
-
+scopes = "read_orders,write_metaobject_definitions,write_metaobjects,write_orders,write_products,write_draft_orders"
 [auth]
 redirect_urls = [
-  "https://shirt-charms-cubic-souls.trycloudflare.com/auth/callback"
+  "https://cod.al-fajr.ma/auth/callback"
 ]
 
 [app_proxy]
-url = "https://shirt-charms-cubic-souls.trycloudflare.com"
+url = "https://cod.al-fajr.ma"
 subpath = "alfajr-cod"
 prefix = "apps"
 
