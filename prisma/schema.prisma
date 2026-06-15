@@ -42,6 +42,21 @@ model CodSettings {
   buttonTextColor   String   @default("#FFFFFF")
   borderRadius      Int      @default(14)
 
+    buttonWidth       String   @default("100%")
+  buttonIcon        String   @default("🚚")
+
+  formTheme         String   @default("premium")
+  formBackgroundColor String @default("#FFFFFF")
+  formTextColor     String   @default("#111827")
+  formBorderColor   String   @default("#E5E7EB")
+  formAccentColor   String   @default("#0D47C7")
+
+  showQuantity      Boolean  @default(true)
+  showEmail         Boolean  @default(false)
+  showNotes         Boolean  @default(false)
+
+  customCss         String   @default("")
+
   popupTitle        String   @default("Commande rapide")
   successPageUrl    String   @default("/pages/merci-commande")
 

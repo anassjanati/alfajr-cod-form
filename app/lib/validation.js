@@ -60,6 +60,17 @@ const CodOrderSchema = z.object({
   productId: z.string().optional(),
   productTitle: z.string().optional(),
   productImage: z.string().optional(),
+
+  email: z.string()
+    .email("Invalid email")
+    .optional()
+    .or(z.literal("")),
+
+  notes: z.string()
+    .max(1000, "Notes must be at most 1000 characters")
+    .optional()
+    .or(z.literal("")),
+
   subtotal: z.coerce.number().optional(),
   total: z.coerce.number().optional()
 }).refine((data) => {

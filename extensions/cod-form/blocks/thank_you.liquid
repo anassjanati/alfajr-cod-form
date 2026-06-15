@@ -1,91 +1,155 @@
-<section class="alfajr-thank-page" id="alfajr-thank-page">
-  <div class="alfajr-thank-card">
-    <div class="alfajr-success-icon">✓</div>
+{% assign alfajr_cod_settings = app.metafields.cod_settings.theme.value %}
 
-    <h1>Merci pour votre commande</h1>
+{% assign button_color = alfajr_cod_settings.buttonColor | default: "#0D47C7" %}
+{% assign button_text_color = alfajr_cod_settings.buttonTextColor | default: "#FFFFFF" %}
+{% assign form_bg = alfajr_cod_settings.formBackgroundColor | default: "#FFFFFF" %}
+{% assign form_text = alfajr_cod_settings.formTextColor | default: "#111827" %}
+{% assign border_radius = alfajr_cod_settings.borderRadius | default: 18 %}
+{% assign form_theme = alfajr_cod_settings.formTheme | default: "premium" %}
+{% assign custom_css = alfajr_cod_settings.customCss | default: "" %}
+
+<section class="alfajr-thank-page alfajr-thank-{{ form_theme }}" id="alfajr-thank-page">
+  <div class="alfajr-thank-card">
+    <div class="alfajr-success-ring">
+      <div class="alfajr-success-icon">✓</div>
+    </div>
+
+    <h1>Commande reçue avec succès</h1>
+
     <p class="alfajr-subtitle">
-      Votre commande a bien été reçue. Notre équipe vous contactera bientôt pour la confirmation.
+      Merci pour votre confiance. Notre équipe vous contactera bientôt pour confirmer votre commande avant l’expédition.
     </p>
 
     <div class="alfajr-product-summary">
-      <img id="alfajr-thank-image" src="" alt="">
+      <img id="alfajr-thank-image" src="" alt="Produit commandé" width="82" height="82">
+
       <div>
         <h3 id="alfajr-thank-product">Produit commandé</h3>
         <p>Quantité: <strong id="alfajr-thank-quantity">1</strong></p>
+        <p>Livraison: <strong id="alfajr-thank-shipping">35 DH</strong></p>
       </div>
     </div>
 
     <div class="alfajr-info-box">
-      <p><strong>Nom:</strong> <span id="alfajr-thank-name"></span></p>
-      <p><strong>Téléphone:</strong> <span id="alfajr-thank-phone"></span></p>
-      <p><strong>Ville:</strong> <span id="alfajr-thank-city"></span></p>
-      <p><strong>Adresse:</strong> <span id="alfajr-thank-address"></span></p>
+      <div>
+        <span>Nom</span>
+        <strong id="alfajr-thank-name">-</strong>
+      </div>
+
+      <div>
+        <span>Téléphone</span>
+        <strong id="alfajr-thank-phone">-</strong>
+      </div>
+
+      <div>
+        <span>Ville</span>
+        <strong id="alfajr-thank-city">-</strong>
+      </div>
+
+      <div>
+        <span>Adresse</span>
+        <strong id="alfajr-thank-address">-</strong>
+      </div>
+    </div>
+
+    <div class="alfajr-trust-row">
+      <span>✓ Paiement à la livraison</span>
+      <span>✓ Livraison partout au Maroc</span>
+      <span>✓ Confirmation rapide</span>
     </div>
 
     <div class="alfajr-upsell-box">
       <h2>Ajoutez un autre produit à votre commande</h2>
       <p>
-        Vous pouvez profiter de la même livraison sans payer une deuxième fois.
+        Vous pouvez continuer vos achats et profiter de la même livraison.
       </p>
-      <a href="/collections/all" class="alfajr-upsell-btn">
+
+      <a href="{{ routes.all_products_collection_url }}" class="alfajr-upsell-btn">
         Voir plus de produits
       </a>
     </div>
 
-    <a href="/" class="alfajr-home-btn">Retour à l’accueil</a>
+    <div class="alfajr-actions">
+      <a href="https://wa.me/212650512222" class="alfajr-whatsapp-btn">
+        💬 Contacter notre équipe
+      </a>
+
+      <a href="{{ routes.root_url }}" class="alfajr-home-btn">
+        Retour à l’accueil
+      </a>
+    </div>
   </div>
 </section>
 
 <style>
   .alfajr-thank-page {
     background: linear-gradient(180deg, #ffffff 0%, #f6f8ff 100%);
-    padding: 40px 16px;
+    padding: 44px 16px;
+    color: {{ form_text }};
   }
 
   .alfajr-thank-card {
-    max-width: 720px;
+    max-width: 760px;
     margin: 0 auto;
-    background: #ffffff;
-    border-radius: 24px;
-    padding: 28px;
-    box-shadow: 0 18px 50px rgba(0,0,0,0.08);
+    background: {{ form_bg }};
+    border-radius: {{ border_radius | plus: 10 }}px;
+    padding: 30px;
+    box-shadow: 0 24px 70px rgba(15,23,42,0.10);
     text-align: center;
+    border: 1px solid rgba(15,23,42,.08);
+  }
+
+  .alfajr-thank-glass .alfajr-thank-card {
+    backdrop-filter: blur(28px);
+    -webkit-backdrop-filter: blur(28px);
+    background: {{ form_bg }};
+  }
+
+  .alfajr-success-ring {
+    width: 84px;
+    height: 84px;
+    border-radius: 999px;
+    background: rgba(13,71,199,.10);
+    display: grid;
+    place-items: center;
+    margin: 0 auto 18px;
   }
 
   .alfajr-success-icon {
-    width: 68px;
-    height: 68px;
-    border-radius: 50%;
-    background: #0D47C7;
-    color: white;
+    width: 62px;
+    height: 62px;
+    border-radius: 999px;
+    background: {{ button_color }};
+    color: {{ button_text_color }};
     display: grid;
     place-items: center;
-    font-size: 36px;
-    font-weight: 900;
-    margin: 0 auto 16px;
+    font-size: 34px;
+    font-weight: 950;
+    box-shadow: 0 14px 32px rgba(13,71,199,.24);
   }
 
   .alfajr-thank-card h1 {
     margin: 0;
-    font-size: 30px;
-    font-weight: 900;
-    color: #111;
+    font-size: 31px;
+    font-weight: 950;
+    letter-spacing: -.5px;
   }
 
   .alfajr-subtitle {
-    color: #555;
-    margin: 12px auto 22px;
-    max-width: 520px;
-    line-height: 1.6;
+    color: rgba(17,24,39,.68);
+    margin: 12px auto 24px;
+    max-width: 560px;
+    line-height: 1.7;
+    font-size: 15px;
   }
 
   .alfajr-product-summary {
     display: flex;
     gap: 14px;
     align-items: center;
-    background: #f7f9ff;
-    border: 1px solid #e5ebff;
-    border-radius: 18px;
+    background: rgba(13,71,199,.055);
+    border: 1px solid rgba(13,71,199,.12);
+    border-radius: {{ border_radius }}px;
     padding: 14px;
     text-align: left;
     margin: 18px 0;
@@ -102,40 +166,77 @@
   .alfajr-product-summary h3 {
     margin: 0 0 6px;
     font-size: 17px;
-    font-weight: 800;
+    font-weight: 900;
   }
 
   .alfajr-product-summary p {
-    margin: 0;
-    color: #555;
+    margin: 4px 0;
+    color: rgba(17,24,39,.68);
   }
 
   .alfajr-info-box {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
     text-align: left;
-    border: 1px solid #eee;
-    border-radius: 18px;
+    border: 1px solid rgba(15,23,42,.08);
+    border-radius: {{ border_radius }}px;
     padding: 16px;
     margin: 18px 0;
-    background: #fff;
+    background: rgba(255,255,255,.72);
   }
 
-  .alfajr-info-box p {
-    margin: 8px 0;
-    color: #333;
+  .alfajr-info-box div {
+    background: #fff;
+    border-radius: 14px;
+    padding: 12px;
+    border: 1px solid rgba(15,23,42,.06);
+  }
+
+  .alfajr-info-box span {
+    display: block;
+    font-size: 12px;
+    color: #667085;
+    margin-bottom: 4px;
+    font-weight: 800;
+  }
+
+  .alfajr-info-box strong {
+    display: block;
+    color: #111827;
+    font-size: 14px;
+    word-break: break-word;
+  }
+
+  .alfajr-trust-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 9px;
+    margin: 18px 0;
+  }
+
+  .alfajr-trust-row span {
+    background: rgba(16,185,129,.10);
+    color: #067647;
+    border: 1px solid rgba(16,185,129,.18);
+    border-radius: 13px;
+    padding: 10px 8px;
+    font-size: 12px;
+    font-weight: 850;
   }
 
   .alfajr-upsell-box {
-    background: linear-gradient(135deg, #0D47C7, #123C91);
-    color: #fff;
-    border-radius: 20px;
-    padding: 22px;
+    background: linear-gradient(135deg, {{ button_color }}, #082B85);
+    color: {{ button_text_color }};
+    border-radius: {{ border_radius | plus: 4 }}px;
+    padding: 23px;
     margin: 20px 0;
   }
 
   .alfajr-upsell-box h2 {
     margin: 0 0 8px;
     font-size: 22px;
-    font-weight: 900;
+    font-weight: 950;
   }
 
   .alfajr-upsell-box p {
@@ -143,37 +244,62 @@
     opacity: .9;
   }
 
+  .alfajr-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
   .alfajr-upsell-btn,
+  .alfajr-whatsapp-btn,
   .alfajr-home-btn {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     text-decoration: none;
-    border-radius: 14px;
+    border-radius: {{ border_radius }}px;
     padding: 13px 18px;
-    font-weight: 800;
+    font-weight: 900;
   }
 
   .alfajr-upsell-btn {
     background: #fff;
-    color: #0D47C7;
+    color: {{ button_color }};
+  }
+
+  .alfajr-whatsapp-btn {
+    background: #10B981;
+    color: #fff;
   }
 
   .alfajr-home-btn {
     background: #f1f3f7;
-    color: #111;
-    margin-top: 8px;
+    color: #111827;
   }
 
-  @media(max-width: 600px) {
-    .alfajr-product-summary {
-      align-items: flex-start;
-    }
+  {{ custom_css }}
 
+  @media(max-width: 600px) {
     .alfajr-thank-card {
       padding: 22px;
     }
 
     .alfajr-thank-card h1 {
       font-size: 25px;
+    }
+
+    .alfajr-product-summary {
+      align-items: flex-start;
+    }
+
+    .alfajr-info-box,
+    .alfajr-trust-row {
+      grid-template-columns: 1fr;
+    }
+
+    .alfajr-actions a {
+      width: 100%;
     }
   }
 </style>
@@ -184,17 +310,29 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (!saved) return;
 
-  const data = JSON.parse(saved);
+  try {
+    const data = JSON.parse(saved);
 
-  document.getElementById("alfajr-thank-product").textContent = data.productTitle || "Produit commandé";
-  document.getElementById("alfajr-thank-quantity").textContent = data.quantity || "1";
-  document.getElementById("alfajr-thank-name").textContent = data.fullName || "";
-  document.getElementById("alfajr-thank-phone").textContent = data.phone || "";
-  document.getElementById("alfajr-thank-city").textContent = data.city || "";
-  document.getElementById("alfajr-thank-address").textContent = data.address || "";
+    const setText = (id, value, fallback = "-") => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = value || fallback;
+    };
 
-  if (data.productImage) {
-    document.getElementById("alfajr-thank-image").src = data.productImage;
+    setText("alfajr-thank-product", data.productTitle, "Produit commandé");
+    setText("alfajr-thank-quantity", data.quantity, "1");
+    setText("alfajr-thank-name", data.fullName);
+    setText("alfajr-thank-phone", data.phone);
+    setText("alfajr-thank-city", data.city);
+    setText("alfajr-thank-address", data.address);
+    setText("alfajr-thank-shipping", `${data.shippingFee || 35} DH`);
+
+    const image = document.getElementById("alfajr-thank-image");
+
+    if (image && data.productImage) {
+      image.src = data.productImage;
+    }
+  } catch (error) {
+    console.error("AL FAJR THANK YOU ERROR:", error);
   }
 });
 </script>

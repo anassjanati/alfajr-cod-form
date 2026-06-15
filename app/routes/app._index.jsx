@@ -1,7 +1,6 @@
 import { useLoaderData, Form, useActionData } from "react-router";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
-import { getAllThemes } from "../lib/themes";
 import "../styles/premium.css";
 import { useState } from "react";
 
@@ -10,34 +9,47 @@ const DEFAULT_SETTINGS = {
   buttonColor: "#0D47C7",
   buttonTextColor: "#FFFFFF",
   borderRadius: 14,
+  buttonWidth: "100%",
+  buttonIcon: "🚚",
+
+  formTheme: "premium",
+  formBackgroundColor: "#FFFFFF",
+  formTextColor: "#111827",
+  formBorderColor: "#E5E7EB",
+  formAccentColor: "#0D47C7",
+
   popupTitle: "Commande rapide",
   successPageUrl: "/pages/merci-commande",
+
   showFullName: true,
   showPhone: true,
   showCity: true,
-  showAddress: true
+  showAddress: true,
+  showQuantity: true,
+  showEmail: false,
+  showNotes: false,
+
+  customCss: ""
 };
 
 async function saveSettingsToShopifyMetafield(admin, settings) {
-  const currentAppInstallationQuery = `
+  const response = await admin.graphql(`
     query {
       currentAppInstallation {
         id
       }
     }
-  `;
+  `);
 
-  const appInstallationResponse = await admin.graphql(currentAppInstallationQuery);
-  const appInstallationJson = await appInstallationResponse.json();
-
-  const appInstallationId =
-    appInstallationJson?.data?.currentAppInstallation?.id;
+  const json = await response.json();
+  const appInstallationId = json?.data?.currentAppInstallation?.id;
 
   if (!appInstallationId) {
     throw new Error("App installation ID not found");
   }
 
-  const metafieldMutation = `
+  const metafieldResponse = await admin.graphql(
+    `
     mutation metafieldsSet($metafields: [MetafieldsSetInput!]!) {
       metafieldsSet(metafields: $metafields) {
         metafields {
@@ -52,23 +64,21 @@ async function saveSettingsToShopifyMetafield(admin, settings) {
         }
       }
     }
-  `;
-
-  const metafieldVariables = {
-    metafields: [
-      {
-        ownerId: appInstallationId,
-        namespace: "cod_settings",
-        key: "theme",
-        type: "json",
-        value: JSON.stringify(settings)
+  `,
+    {
+      variables: {
+        metafields: [
+          {
+            ownerId: appInstallationId,
+            namespace: "cod_settings",
+            key: "theme",
+            type: "json",
+            value: JSON.stringify(settings)
+          }
+        ]
       }
-    ]
-  };
-
-  const metafieldResponse = await admin.graphql(metafieldMutation, {
-    variables: metafieldVariables
-  });
+    }
+  );
 
   const metafieldJson = await metafieldResponse.json();
   const errors = metafieldJson?.data?.metafieldsSet?.userErrors || [];
@@ -76,24 +86,17 @@ async function saveSettingsToShopifyMetafield(admin, settings) {
   if (errors.length > 0) {
     throw new Error(errors.map((error) => error.message).join(", "));
   }
-
-  return true;
 }
 
 export async function loader({ request }) {
   const { session } = await authenticate.admin(request);
   const shop = session.shop;
 
-  let settings = await prisma.codSettings.findUnique({
-    where: { shop }
-  });
+  let settings = await prisma.codSettings.findUnique({ where: { shop } });
 
   if (!settings) {
     settings = await prisma.codSettings.create({
-      data: {
-        shop,
-        ...DEFAULT_SETTINGS
-      }
+      data: { shop, ...DEFAULT_SETTINGS }
     });
   }
 
@@ -107,8 +110,7 @@ export async function loader({ request }) {
     });
   }
 
-  const [themes, zones, orders] = await Promise.all([
-    prisma.colorTheme.findMany({ where: { shop } }),
+  const [zones, orders] = await Promise.all([
     prisma.shippingZone.findMany({
       where: { shop },
       orderBy: { zone: "asc" }
@@ -120,6 +122,11 @@ export async function loader({ request }) {
     })
   ]);
 
+  const totalRevenueResult = await prisma.codOrder.aggregate({
+    where: { shop },
+    _sum: { total: true }
+  });
+
   const orderStats = {
     total: await prisma.codOrder.count({ where: { shop } }),
     thisMonth: await prisma.codOrder.count({
@@ -128,22 +135,15 @@ export async function loader({ request }) {
         createdAt: { gte: new Date(new Date().setDate(1)) }
       }
     }),
-    totalRevenue: (
-      await prisma.codOrder.aggregate({
-        where: { shop },
-        _sum: { total: true }
-      })
-    )._sum.total || 0
+    totalRevenue: totalRevenueResult._sum.total || 0
   };
 
   return {
     settings,
-    themes,
     zones,
     orders,
     emailSettings,
-    orderStats,
-    presetThemes: getAllThemes()
+    orderStats
   };
 }
 
@@ -156,34 +156,39 @@ export async function action({ request }) {
   try {
     if (actionType === "updateSettings") {
       const newSettings = {
-        buttonText:
-          formData.get("buttonText") ||
-          DEFAULT_SETTINGS.buttonText,
-
-        buttonColor:
-          formData.get("buttonColor") ||
-          DEFAULT_SETTINGS.buttonColor,
-
+        buttonText: formData.get("buttonText") || DEFAULT_SETTINGS.buttonText,
+        buttonColor: formData.get("buttonColor") || DEFAULT_SETTINGS.buttonColor,
         buttonTextColor:
-          formData.get("buttonTextColor") ||
-          DEFAULT_SETTINGS.buttonTextColor,
-
+          formData.get("buttonTextColor") || DEFAULT_SETTINGS.buttonTextColor,
         borderRadius:
-          Number(formData.get("borderRadius")) ||
-          DEFAULT_SETTINGS.borderRadius,
+          Number(formData.get("borderRadius")) || DEFAULT_SETTINGS.borderRadius,
+        buttonWidth: formData.get("buttonWidth") || DEFAULT_SETTINGS.buttonWidth,
+        buttonIcon: formData.get("buttonIcon") || DEFAULT_SETTINGS.buttonIcon,
 
-        popupTitle:
-          formData.get("popupTitle") ||
-          DEFAULT_SETTINGS.popupTitle,
+        formTheme: formData.get("formTheme") || DEFAULT_SETTINGS.formTheme,
+        formBackgroundColor:
+          formData.get("formBackgroundColor") ||
+          DEFAULT_SETTINGS.formBackgroundColor,
+        formTextColor:
+          formData.get("formTextColor") || DEFAULT_SETTINGS.formTextColor,
+        formBorderColor:
+          formData.get("formBorderColor") || DEFAULT_SETTINGS.formBorderColor,
+        formAccentColor:
+          formData.get("formAccentColor") || DEFAULT_SETTINGS.formAccentColor,
 
+        popupTitle: formData.get("popupTitle") || DEFAULT_SETTINGS.popupTitle,
         successPageUrl:
-          formData.get("successPageUrl") ||
-          DEFAULT_SETTINGS.successPageUrl,
+          formData.get("successPageUrl") || DEFAULT_SETTINGS.successPageUrl,
 
         showFullName: formData.get("showFullName") === "on",
         showPhone: formData.get("showPhone") === "on",
         showCity: formData.get("showCity") === "on",
-        showAddress: formData.get("showAddress") === "on"
+        showAddress: formData.get("showAddress") === "on",
+        showQuantity: formData.get("showQuantity") === "on",
+        showEmail: formData.get("showEmail") === "on",
+        showNotes: formData.get("showNotes") === "on",
+
+        customCss: formData.get("customCss") || ""
       };
 
       await prisma.codSettings.upsert({
@@ -199,73 +204,8 @@ export async function action({ request }) {
 
       return {
         success: true,
-        message: "Paramètres mis à jour et synchronisés avec la boutique"
+        message: "Paramètres enregistrés et synchronisés avec la boutique"
       };
-    }
-
-    if (actionType === "applyTheme") {
-      const theme = JSON.parse(formData.get("theme"));
-
-      const currentSettings =
-        await prisma.codSettings.findUnique({ where: { shop } });
-
-      const newSettings = {
-        buttonText:
-          formData.get("buttonText") ||
-          currentSettings?.buttonText ||
-          DEFAULT_SETTINGS.buttonText,
-
-        buttonColor:
-          theme.buttonColor ||
-          currentSettings?.buttonColor ||
-          DEFAULT_SETTINGS.buttonColor,
-
-        buttonTextColor:
-          theme.textColor ||
-          currentSettings?.buttonTextColor ||
-          DEFAULT_SETTINGS.buttonTextColor,
-
-        borderRadius:
-          currentSettings?.borderRadius ||
-          DEFAULT_SETTINGS.borderRadius,
-
-        popupTitle:
-          currentSettings?.popupTitle ||
-          DEFAULT_SETTINGS.popupTitle,
-
-        successPageUrl:
-          currentSettings?.successPageUrl ||
-          DEFAULT_SETTINGS.successPageUrl,
-
-        showFullName:
-          currentSettings?.showFullName ??
-          DEFAULT_SETTINGS.showFullName,
-
-        showPhone:
-          currentSettings?.showPhone ??
-          DEFAULT_SETTINGS.showPhone,
-
-        showCity:
-          currentSettings?.showCity ??
-          DEFAULT_SETTINGS.showCity,
-
-        showAddress:
-          currentSettings?.showAddress ??
-          DEFAULT_SETTINGS.showAddress
-      };
-
-      await prisma.codSettings.upsert({
-        where: { shop },
-        update: newSettings,
-        create: {
-          shop,
-          ...newSettings
-        }
-      });
-
-      await saveSettingsToShopifyMetafield(admin, newSettings);
-
-      return { success: true, message: "Thème appliqué" };
     }
 
     if (actionType === "addZone") {
@@ -317,19 +257,9 @@ export async function action({ request }) {
 }
 
 export default function PremiumDashboard() {
-  const {
-    settings,
-    themes,
-    zones,
-    orders,
-    emailSettings,
-    orderStats,
-    presetThemes
-  } = useLoaderData();
-
+  const { settings, zones, orders, emailSettings, orderStats } = useLoaderData();
   const actionData = useActionData();
   const [activeTab, setActiveTab] = useState("dashboard");
-
   const [previewSettings, setPreviewSettings] = useState(
     settings || DEFAULT_SETTINGS
   );
@@ -337,9 +267,9 @@ export default function PremiumDashboard() {
   return (
     <div className="premium-container">
       <div className="header-section">
-        <h1 className="header-title">🚀 AL FAJR Premium COD</h1>
+        <h1 className="header-title">🚀 AL FAJR COD Express</h1>
         <p className="header-subtitle">
-          Tableau de bord avancé pour gérer vos commandes, thèmes et paramètres
+          Application professionnelle pour gérer les commandes COD au Maroc.
         </p>
       </div>
 
@@ -353,6 +283,7 @@ export default function PremiumDashboard() {
 
       <div className="tabs-container">
         <button
+          type="button"
           className={`tab-button ${activeTab === "dashboard" ? "active" : ""}`}
           onClick={() => setActiveTab("dashboard")}
         >
@@ -360,27 +291,31 @@ export default function PremiumDashboard() {
         </button>
 
         <button
+          type="button"
           className={`tab-button ${activeTab === "customization" ? "active" : ""}`}
           onClick={() => setActiveTab("customization")}
         >
-          🎨 Personnalisation
+          🎨 Form Builder
         </button>
 
         <button
+          type="button"
           className={`tab-button ${activeTab === "shipping" ? "active" : ""}`}
           onClick={() => setActiveTab("shipping")}
         >
-          🚚 Zones de livraison
+          🚚 Livraison
         </button>
 
         <button
+          type="button"
           className={`tab-button ${activeTab === "email" ? "active" : ""}`}
           onClick={() => setActiveTab("email")}
         >
-          ✉️ Notifications email
+          ✉️ Notifications
         </button>
 
         <button
+          type="button"
           className={`tab-button ${activeTab === "orders" ? "active" : ""}`}
           onClick={() => setActiveTab("orders")}
         >
@@ -397,15 +332,12 @@ export default function PremiumDashboard() {
           <CustomizationTab
             settings={previewSettings}
             setSettings={setPreviewSettings}
-            presetThemes={presetThemes}
           />
         )}
 
         {activeTab === "shipping" && <ShippingTab zones={zones} />}
 
-        {activeTab === "email" && (
-          <EmailTab emailSettings={emailSettings} />
-        )}
+        {activeTab === "email" && <EmailTab emailSettings={emailSettings} />}
 
         {activeTab === "orders" && <OrdersTab orders={orders} />}
       </div>
@@ -440,9 +372,7 @@ function DashboardTab({ stats, orders }) {
 
         {orders.length === 0 ? (
           <div className="empty-state">
-            <div className="empty-state-text">
-              Aucune commande pour le moment
-            </div>
+            <div className="empty-state-text">Aucune commande pour le moment</div>
           </div>
         ) : (
           <table className="table">
@@ -461,9 +391,7 @@ function DashboardTab({ stats, orders }) {
                   <td>{order.customerName}</td>
                   <td>{order.city}</td>
                   <td>{order.total} DH</td>
-                  <td>
-                    {new Date(order.createdAt).toLocaleDateString("fr-FR")}
-                  </td>
+                  <td>{new Date(order.createdAt).toLocaleDateString("fr-FR")}</td>
                 </tr>
               ))}
             </tbody>
@@ -474,42 +402,106 @@ function DashboardTab({ stats, orders }) {
   );
 }
 
-function CustomizationTab({ settings, setSettings, presetThemes }) {
+function CustomizationTab({ settings, setSettings }) {
   const safeSettings = settings || DEFAULT_SETTINGS;
+
+  const applyTheme = (themeName) => {
+    const themes = {
+      premium: {
+        formTheme: "premium",
+        buttonColor: "#0D47C7",
+        buttonTextColor: "#FFFFFF",
+        formBackgroundColor: "#FFFFFF",
+        formTextColor: "#111827",
+        formBorderColor: "#E5E7EB",
+        formAccentColor: "#0D47C7",
+        borderRadius: 14
+      },
+      minimal: {
+        formTheme: "minimal",
+        buttonColor: "#111827",
+        buttonTextColor: "#FFFFFF",
+        formBackgroundColor: "#FFFFFF",
+        formTextColor: "#111827",
+        formBorderColor: "#E5E7EB",
+        formAccentColor: "#111827",
+        borderRadius: 10
+      },
+      glass: {
+        formTheme: "glass",
+        buttonColor: "#0D47C7",
+        buttonTextColor: "#FFFFFF",
+        formBackgroundColor: "rgba(255,255,255,0.72)",
+        formTextColor: "#111827",
+        formBorderColor: "rgba(255,255,255,0.45)",
+        formAccentColor: "#0D47C7",
+        borderRadius: 22
+      },
+      dark: {
+        formTheme: "dark",
+        buttonColor: "#FFC928",
+        buttonTextColor: "#111827",
+        formBackgroundColor: "#111827",
+        formTextColor: "#FFFFFF",
+        formBorderColor: "#374151",
+        formAccentColor: "#FFC928",
+        borderRadius: 16
+      }
+    };
+
+    setSettings({
+      ...safeSettings,
+      ...themes[themeName]
+    });
+  };
 
   return (
     <Form method="post" className="grid">
       <input type="hidden" name="_action" value="updateSettings" />
+      <input type="hidden" name="formTheme" value={safeSettings.formTheme} />
 
       <div className="card">
-        <h3 className="card-title">🎨 Thèmes prédéfinis</h3>
+        <h3 className="card-title">⚡ Style rapide</h3>
 
         <div className="theme-selector">
-          {presetThemes.map((theme) => (
-            <div
-              key={theme.id}
-              className="theme-item"
-              onClick={() =>
-                setSettings({
-                  ...safeSettings,
-                  buttonColor: theme.buttonColor,
-                  buttonTextColor: theme.textColor
-                })
-              }
-            >
-              <div
-                className="theme-preview"
-                style={{ backgroundColor: theme.buttonColor }}
-              ></div>
+          <button type="button" className="theme-item" onClick={() => applyTheme("premium")}>
+            <div className="theme-preview" style={{ background: "#0D47C7" }} />
+            <div className="theme-name">Premium</div>
+          </button>
 
-              <div className="theme-name">{theme.name}</div>
-            </div>
-          ))}
+          <button type="button" className="theme-item" onClick={() => applyTheme("minimal")}>
+            <div className="theme-preview" style={{ background: "#111827" }} />
+            <div className="theme-name">Minimal</div>
+          </button>
+
+          <button type="button" className="theme-item" onClick={() => applyTheme("glass")}>
+            <div
+              className="theme-preview"
+              style={{ background: "linear-gradient(135deg,#E0F2FE,#FFFFFF)" }}
+            />
+            <div className="theme-name">Glass Apple</div>
+          </button>
+
+          <button type="button" className="theme-item" onClick={() => applyTheme("dark")}>
+            <div className="theme-preview" style={{ background: "#111827" }} />
+            <div className="theme-name">Dark</div>
+          </button>
         </div>
       </div>
 
       <div className="card">
         <h3 className="card-title">🔘 Bouton COD</h3>
+
+        <div className="form-group">
+          <label className="label">Icône du bouton</label>
+          <input
+            type="text"
+            name="buttonIcon"
+            value={safeSettings.buttonIcon}
+            className="input"
+            onChange={(e) => setSettings({ ...safeSettings, buttonIcon: e.target.value })}
+          />
+        </div>
 
         <div className="form-group">
           <label className="label">Texte du bouton</label>
@@ -518,13 +510,23 @@ function CustomizationTab({ settings, setSettings, presetThemes }) {
             name="buttonText"
             value={safeSettings.buttonText}
             className="input"
-            onChange={(e) =>
-              setSettings({
-                ...safeSettings,
-                buttonText: e.target.value
-              })
-            }
+            onChange={(e) => setSettings({ ...safeSettings, buttonText: e.target.value })}
           />
+        </div>
+
+        <div className="form-group">
+          <label className="label">Largeur du bouton</label>
+          <select
+            name="buttonWidth"
+            value={safeSettings.buttonWidth}
+            className="input"
+            onChange={(e) => setSettings({ ...safeSettings, buttonWidth: e.target.value })}
+          >
+            <option value="100%">100% pleine largeur</option>
+            <option value="auto">Auto</option>
+            <option value="80%">80%</option>
+            <option value="60%">60%</option>
+          </select>
         </div>
 
         <div className="form-group">
@@ -534,12 +536,7 @@ function CustomizationTab({ settings, setSettings, presetThemes }) {
             name="buttonColor"
             value={safeSettings.buttonColor}
             className="color-input"
-            onChange={(e) =>
-              setSettings({
-                ...safeSettings,
-                buttonColor: e.target.value
-              })
-            }
+            onChange={(e) => setSettings({ ...safeSettings, buttonColor: e.target.value })}
           />
         </div>
 
@@ -550,17 +547,12 @@ function CustomizationTab({ settings, setSettings, presetThemes }) {
             name="buttonTextColor"
             value={safeSettings.buttonTextColor}
             className="color-input"
-            onChange={(e) =>
-              setSettings({
-                ...safeSettings,
-                buttonTextColor: e.target.value
-              })
-            }
+            onChange={(e) => setSettings({ ...safeSettings, buttonTextColor: e.target.value })}
           />
         </div>
 
         <div className="form-group">
-          <label className="label">Arrondi des coins (0-50)</label>
+          <label className="label">Arrondi des coins</label>
           <input
             type="number"
             name="borderRadius"
@@ -569,46 +561,64 @@ function CustomizationTab({ settings, setSettings, presetThemes }) {
             value={safeSettings.borderRadius}
             className="input"
             onChange={(e) =>
-              setSettings({
-                ...safeSettings,
-                borderRadius: Number(e.target.value)
-              })
+              setSettings({ ...safeSettings, borderRadius: Number(e.target.value) })
             }
           />
         </div>
       </div>
 
       <div className="card">
-        <h3 className="card-title">💬 Popup</h3>
+        <h3 className="card-title">🧊 Style du formulaire</h3>
 
         <div className="form-group">
-          <label className="label">Titre de la popup</label>
+          <label className="label">Fond du formulaire</label>
           <input
             type="text"
-            name="popupTitle"
-            value={safeSettings.popupTitle}
+            name="formBackgroundColor"
+            value={safeSettings.formBackgroundColor}
             className="input"
+            placeholder="#FFFFFF ou rgba(255,255,255,.72)"
             onChange={(e) =>
-              setSettings({
-                ...safeSettings,
-                popupTitle: e.target.value
-              })
+              setSettings({ ...safeSettings, formBackgroundColor: e.target.value })
             }
           />
         </div>
 
         <div className="form-group">
-          <label className="label">URL page de remerciement</label>
+          <label className="label">Couleur du texte</label>
+          <input
+            type="color"
+            name="formTextColor"
+            value={safeSettings.formTextColor}
+            className="color-input"
+            onChange={(e) =>
+              setSettings({ ...safeSettings, formTextColor: e.target.value })
+            }
+          />
+        </div>
+
+        <div className="form-group">
+          <label className="label">Couleur des bordures</label>
           <input
             type="text"
-            name="successPageUrl"
-            value={safeSettings.successPageUrl}
+            name="formBorderColor"
+            value={safeSettings.formBorderColor}
             className="input"
             onChange={(e) =>
-              setSettings({
-                ...safeSettings,
-                successPageUrl: e.target.value
-              })
+              setSettings({ ...safeSettings, formBorderColor: e.target.value })
+            }
+          />
+        </div>
+
+        <div className="form-group">
+          <label className="label">Couleur accent</label>
+          <input
+            type="color"
+            name="formAccentColor"
+            value={safeSettings.formAccentColor}
+            className="color-input"
+            onChange={(e) =>
+              setSettings({ ...safeSettings, formAccentColor: e.target.value })
             }
           />
         </div>
@@ -618,89 +628,114 @@ function CustomizationTab({ settings, setSettings, presetThemes }) {
         <h3 className="card-title">📋 Champs du formulaire</h3>
 
         <div className="checkbox-group">
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              name="showFullName"
-              checked={safeSettings.showFullName}
-              onChange={(e) =>
-                setSettings({
-                  ...safeSettings,
-                  showFullName: e.target.checked
-                })
-              }
-            />
-            Afficher le nom complet
-          </label>
-
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              name="showPhone"
-              checked={safeSettings.showPhone}
-              onChange={(e) =>
-                setSettings({
-                  ...safeSettings,
-                  showPhone: e.target.checked
-                })
-              }
-            />
-            Afficher le téléphone
-          </label>
-
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              name="showCity"
-              checked={safeSettings.showCity}
-              onChange={(e) =>
-                setSettings({
-                  ...safeSettings,
-                  showCity: e.target.checked
-                })
-              }
-            />
-            Afficher la ville
-          </label>
-
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              name="showAddress"
-              checked={safeSettings.showAddress}
-              onChange={(e) =>
-                setSettings({
-                  ...safeSettings,
-                  showAddress: e.target.checked
-                })
-              }
-            />
-            Afficher l'adresse
-          </label>
+          {[
+            ["showFullName", "Nom complet"],
+            ["showPhone", "Téléphone"],
+            ["showCity", "Ville"],
+            ["showAddress", "Adresse"],
+            ["showQuantity", "Quantité"],
+            ["showEmail", "Email"],
+            ["showNotes", "Notes client"]
+          ].map(([key, label]) => (
+            <label className="checkbox-label" key={key}>
+              <input
+                type="checkbox"
+                name={key}
+                checked={Boolean(safeSettings[key])}
+                onChange={(e) =>
+                  setSettings({ ...safeSettings, [key]: e.target.checked })
+                }
+              />
+              {label}
+            </label>
+          ))}
         </div>
       </div>
 
       <div className="card">
-        <h3 className="card-title">👁️ Aperçu</h3>
+        <h3 className="card-title">💬 Popup & Thank You</h3>
 
-        <div className="preview-section">
+        <div className="form-group">
+          <label className="label">Titre de la popup</label>
+          <input
+            type="text"
+            name="popupTitle"
+            value={safeSettings.popupTitle}
+            className="input"
+            onChange={(e) => setSettings({ ...safeSettings, popupTitle: e.target.value })}
+          />
+        </div>
+
+        <div className="form-group">
+          <label className="label">URL page merci</label>
+          <input
+            type="text"
+            name="successPageUrl"
+            value={safeSettings.successPageUrl}
+            className="input"
+            onChange={(e) =>
+              setSettings({ ...safeSettings, successPageUrl: e.target.value })
+            }
+          />
+        </div>
+      </div>
+
+      <div className="card">
+        <h3 className="card-title">👁️ Aperçu client</h3>
+
+        <div
+          className={`preview-section preview-${safeSettings.formTheme}`}
+          style={{
+            background: safeSettings.formBackgroundColor,
+            color: safeSettings.formTextColor,
+            borderColor: safeSettings.formBorderColor,
+            borderRadius: `${safeSettings.borderRadius + 8}px`
+          }}
+        >
           <button
             type="button"
             className="preview-button"
             style={{
+              width: safeSettings.buttonWidth,
               background: safeSettings.buttonColor,
               color: safeSettings.buttonTextColor,
               borderRadius: `${safeSettings.borderRadius}px`
             }}
           >
-            {safeSettings.buttonText}
+            {safeSettings.buttonIcon} {safeSettings.buttonText}
           </button>
+
+          <div style={{ marginTop: 16, textAlign: "left", fontWeight: 800 }}>
+            {safeSettings.popupTitle}
+          </div>
+
+          <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
+            <div className="input">Nom complet</div>
+            <div className="input">Téléphone</div>
+            <div className="input">Ville</div>
+          </div>
         </div>
       </div>
 
-      <div style={{ gridColumn: "1 / -1", marginTop: "16px" }}>
+      <div className="card" style={{ gridColumn: "1 / -1" }}>
+        <h3 className="card-title">🧩 CSS personnalisé</h3>
+
+        <div className="form-group">
+          <label className="label">Advanced Custom CSS</label>
+          <textarea
+            name="customCss"
+            value={safeSettings.customCss}
+            className="textarea"
+            rows="8"
+            placeholder=".alfajr-product-modal-content { backdrop-filter: blur(30px); }"
+            onChange={(e) => setSettings({ ...safeSettings, customCss: e.target.value })}
+          />
+        </div>
+      </div>
+
+      <div style={{ gridColumn: "1 / -1" }}>
         <button type="submit" className="button button-primary">
-          💾 Enregistrer les paramètres
+          💾 Enregistrer et synchroniser avec la boutique
         </button>
       </div>
     </Form>
@@ -739,7 +774,7 @@ function ShippingTab({ zones }) {
         </div>
 
         <div className="form-group">
-          <label className="label">Jours estimés (optionnel)</label>
+          <label className="label">Jours estimés</label>
           <input
             type="number"
             name="estimatedDays"
@@ -878,9 +913,7 @@ function OrdersTab({ orders }) {
         <div className="empty-state">
           <div className="empty-state-icon">📋</div>
           <div className="empty-state-title">Aucune commande</div>
-          <div className="empty-state-text">
-            Les commandes apparaîtront ici
-          </div>
+          <div className="empty-state-text">Les commandes apparaîtront ici</div>
         </div>
       ) : (
         <table className="table">
@@ -911,9 +944,7 @@ function OrdersTab({ orders }) {
                     {order.status}
                   </span>
                 </td>
-                <td>
-                  {new Date(order.createdAt).toLocaleDateString("fr-FR")}
-                </td>
+                <td>{new Date(order.createdAt).toLocaleDateString("fr-FR")}</td>
               </tr>
             ))}
           </tbody>

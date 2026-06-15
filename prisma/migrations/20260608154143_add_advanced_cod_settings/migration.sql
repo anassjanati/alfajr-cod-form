@@ -1,0 +1,12 @@
+-- AlterTable
+ALTER TABLE "CodSettings" ADD COLUMN     "buttonIcon" TEXT NOT NULL DEFAULT '🚚',
+ADD COLUMN     "buttonWidth" TEXT NOT NULL DEFAULT '100%',
+ADD COLUMN     "customCss" TEXT NOT NULL DEFAULT '',
+ADD COLUMN     "formAccentColor" TEXT NOT NULL DEFAULT '#0D47C7',
+ADD COLUMN     "formBackgroundColor" TEXT NOT NULL DEFAULT '#FFFFFF',
+ADD COLUMN     "formBorderColor" TEXT NOT NULL DEFAULT '#E5E7EB',
+ADD COLUMN     "formTextColor" TEXT NOT NULL DEFAULT '#111827',
+ADD COLUMN     "formTheme" TEXT NOT NULL DEFAULT 'premium',
+ADD COLUMN     "showEmail" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN     "showNotes" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN     "showQuantity" BOOLEAN NOT NULL DEFAULT true;
