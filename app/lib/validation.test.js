@@ -1,114 +1,119 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { validateCodOrder, ShopDomainSchema } from "./validation";
+import { describe, it, expect } from "vitest";
+import { validateCodOrder } from "./validation";
 
-describe("Validation", () => {
-  describe("validateCodOrder", () => {
-    const validData = {
-      shop: "test-store.myshopify.com",
-      fullName: "Ahmed Alami",
-      phone: "+212 612 345 678",
-      city: "Casablanca",
-      address: "123 Rue Ahmed, Apt 5, Casablanca, 20000",
-      quantity: 2,
-      shippingFee: 35,
-      variantId: "12345"
-    };
+describe("COD order validation", () => {
+  const validData = {
+    fullName: "Ahmed Alami",
+    phone: "+212 612 345 678",
+    city: "Casablanca",
+    address: "123 Rue Ahmed, Casablanca",
+    quantity: 2,
+    variantId: "12345",
+    idempotencyKey: "550e8400-e29b-41d4-a716-446655440000",
+    formStartedAt: Date.now() - 3000,
+  };
 
-    it("should pass validation with valid data", () => {
-      const result = validateCodOrder(validData);
-      expect(result.success).toBe(true);
-      expect(result.data).toBeDefined();
-      expect(result.errors).toBeNull();
-    });
-
-    it("should fail with missing shop", () => {
-      const data = { ...validData, shop: undefined };
-      const result = validateCodOrder(data);
-      expect(result.success).toBe(false);
-      expect(result.errors).toBeDefined();
-    });
-
-    it("should fail with invalid shop domain", () => {
-      const data = { ...validData, shop: "invalid-shop" };
-      const result = validateCodOrder(data);
-      expect(result.success).toBe(false);
-      expect(result.errors.shop).toBeDefined();
-    });
-
-    it("should fail with empty fullName", () => {
-      const data = { ...validData, fullName: "" };
-      const result = validateCodOrder(data);
-      expect(result.success).toBe(false);
-      expect(result.errors.fullName).toBeDefined();
-    });
-
-    it("should fail with fullName exceeding max length", () => {
-      const data = { ...validData, fullName: "A".repeat(256) };
-      const result = validateCodOrder(data);
-      expect(result.success).toBe(false);
-      expect(result.errors.fullName).toBeDefined();
-    });
-
-    it("should fail with invalid phone format", () => {
-      const data = { ...validData, phone: "abc" };
-      const result = validateCodOrder(data);
-      expect(result.success).toBe(false);
-      expect(result.errors.phone).toBeDefined();
-    });
-
-    it("should fail with address too short", () => {
-      const data = { ...validData, address: "ABC" };
-      const result = validateCodOrder(data);
-      expect(result.success).toBe(false);
-      expect(result.errors.address).toBeDefined();
-    });
-
-    it("should fail with quantity 0", () => {
-      const data = { ...validData, quantity: 0 };
-      const result = validateCodOrder(data);
-      expect(result.success).toBe(false);
-      expect(result.errors.quantity).toBeDefined();
-    });
-
-    it("should fail with negative shippingFee", () => {
-      const data = { ...validData, shippingFee: -10 };
-      const result = validateCodOrder(data);
-      expect(result.success).toBe(false);
-      expect(result.errors.shippingFee).toBeDefined();
-    });
-
-    it("should pass with optional items array", () => {
-      const data = {
-        ...validData,
-        items: [
-          { variantId: "12345", quantity: 1 },
-          { variantId: "67890", quantity: 2 }
-        ]
-      };
-      const result = validateCodOrder(data);
-      expect(result.success).toBe(true);
-    });
+  it("accepts valid product-form data", () => {
+    const result = validateCodOrder(validData);
+    expect(result.success).toBe(true);
+    expect(result.data).toBeDefined();
+    expect(result.errors).toBeNull();
   });
 
-  describe("ShopDomainSchema", () => {
-    it("should accept valid Shopify shop domain", () => {
-      const result = ShopDomainSchema.safeParse("test-store.myshopify.com");
-      expect(result.success).toBe(true);
+  it("does not require or trust a client-provided shop", () => {
+    const result = validateCodOrder({
+      ...validData,
+      shop: "attacker.myshopify.com",
     });
 
-    it("should accept shop with hyphens", () => {
-      const result = ShopDomainSchema.safeParse("my-test-store-2024.myshopify.com");
-      expect(result.success).toBe(true);
+    expect(result.success).toBe(true);
+    expect(result.data.shop).toBeUndefined();
+  });
+
+  it("strips a client-provided shipping fee and totals", () => {
+    const result = validateCodOrder({
+      ...validData,
+      shippingFee: -500,
+      subtotal: 1,
+      total: 1,
     });
 
-    it("should reject invalid domain", () => {
-      const result = ShopDomainSchema.safeParse("not-a-shopify-domain.com");
-      expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
+    expect(result.data.shippingFee).toBeUndefined();
+    expect(result.data.subtotal).toBeUndefined();
+    expect(result.data.total).toBeUndefined();
+  });
+
+  it("rejects an empty full name", () => {
+    const result = validateCodOrder({ ...validData, fullName: "" });
+    expect(result.success).toBe(false);
+    expect(result.errors.fullName).toBeDefined();
+  });
+
+  it("rejects an excessively long full name", () => {
+    const result = validateCodOrder({ ...validData, fullName: "A".repeat(121) });
+    expect(result.success).toBe(false);
+    expect(result.errors.fullName).toBeDefined();
+  });
+
+  it("rejects an invalid phone format", () => {
+    const result = validateCodOrder({ ...validData, phone: "abc" });
+    expect(result.success).toBe(false);
+    expect(result.errors.phone).toBeDefined();
+  });
+
+  it("rejects an address that is too short", () => {
+    const result = validateCodOrder({ ...validData, address: "ABC" });
+    expect(result.success).toBe(false);
+    expect(result.errors.address).toBeDefined();
+  });
+
+  it("rejects a zero quantity", () => {
+    const result = validateCodOrder({ ...validData, quantity: 0 });
+    expect(result.success).toBe(false);
+    expect(result.errors.quantity).toBeDefined();
+  });
+
+  it("rejects a quantity above the operational limit", () => {
+    const result = validateCodOrder({ ...validData, quantity: 101 });
+    expect(result.success).toBe(false);
+    expect(result.errors.quantity).toBeDefined();
+  });
+
+  it("accepts a cart items array", () => {
+    const base = { ...validData };
+    delete base.variantId;
+    delete base.quantity;
+    const result = validateCodOrder({
+      ...base,
+      items: [
+        { variantId: "12345", quantity: 1 },
+        { variantId: "67890", quantity: 2 },
+      ],
     });
 
-    it("should reject empty string", () => {
-      const result = ShopDomainSchema.safeParse("");
-      expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a request with no variant or cart items", () => {
+    const data = { ...validData };
+    delete data.variantId;
+    delete data.quantity;
+    const result = validateCodOrder(data);
+    expect(result.success).toBe(false);
+    expect(result.errors.variantId).toBeDefined();
+  });
+
+  it("accepts supported campaign attribution fields", () => {
+    const result = validateCodOrder({
+      ...validData,
+      utmSource: "facebook",
+      utmCampaign: "notebook-july",
+      fbclid: "example-click-id",
+      landingPage: "https://al-fajr.ma/products/notebook",
     });
+
+    expect(result.success).toBe(true);
+    expect(result.data.utmSource).toBe("facebook");
   });
 });

@@ -1,216 +1,270 @@
-import { unauthenticated } from "../shopify.server";
+import { randomUUID } from "node:crypto";
+import { Buffer } from "node:buffer";
+import { authenticate } from "../shopify.server";
 import { validateCodOrder } from "../lib/validation";
 import { createLogger } from "../lib/logger";
-import { checkRateLimit } from "../lib/rateLimiter";
+import {
+  checkCodRateLimits,
+  getClientIp,
+} from "../lib/rateLimiter";
+import {
+  buildShippingTag,
+  getShippingFee,
+} from "../lib/shipping";
 import prisma from "../db.server";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers":
-    "Content-Type, idempotency-key, x-shopify-shop-domain",
-  "Content-Type": "application/json"
+const JSON_HEADERS = {
+  "Content-Type": "application/json; charset=utf-8",
+  "Cache-Control": "no-store",
+  "X-Content-Type-Options": "nosniff",
 };
 
-export async function loader({ request }) {
-  if (request.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: corsHeaders });
-  }
+const MAX_BODY_BYTES = 32 * 1024;
+const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
 
-  return new Response(
-    JSON.stringify({
-      success: true,
-      message: "COD API is working"
-    }),
-    {
-      status: 200,
-      headers: corsHeaders
-    }
-  );
-}
-
-function generateIdempotencyKey() {
-  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+function json(data, status = 200, extraHeaders = {}) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      ...JSON_HEADERS,
+      ...extraHeaders,
+    },
+  });
 }
 
 function normalizePhone(phone) {
-  let value = String(phone || "").replace(/\s|-/g, "").trim();
+  let value = String(phone || "")
+    .replace(/[\s\-()]/g, "")
+    .trim();
 
-  if (value.startsWith("+212")) {
-    value = "0" + value.slice(4);
-  }
-
-  if (value.startsWith("212")) {
-    value = "0" + value.slice(3);
-  }
+  if (value.startsWith("+212")) value = `0${value.slice(4)}`;
+  if (value.startsWith("212")) value = `0${value.slice(3)}`;
 
   return value;
 }
 
-function normalizeCity(city) {
-  return String(city || "")
-    .toLowerCase()
+function splitFullName(fullName) {
+  const parts = String(fullName || "")
     .trim()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-}
+    .split(/\s+/)
+    .filter(Boolean);
 
-function buildShippingTag(city, shippingFee) {
-  const normalizedCity = normalizeCity(city);
-
-  if (
-    normalizedCity.includes("fes") ||
-    normalizedCity.includes("fez") ||
-    normalizedCity.includes("فاس")
-  ) {
-    return "FES-20DH";
-  }
-
-  return `MAROC-${Number(shippingFee || 35)}DH`;
+  return {
+    firstName: parts.shift() || "Client",
+    lastName: parts.join(" ") || undefined,
+  };
 }
 
 function buildOrderNote(data) {
-  return `AL FAJR COD Express
-
-Nom: ${data.fullName}
-Téléphone: ${data.phone}
-Ville: ${data.city}
-Adresse: ${data.address}
-Livraison: ${data.shippingFee} DH
-Email: ${data.email || "-"}
-Note client: ${data.notes || "-"}
-
-Source: AL FAJR COD Express`;
+  return [
+    "AL FAJR COD Express",
+    "",
+    `Nom: ${data.fullName}`,
+    `Téléphone: ${data.phone}`,
+    `Ville: ${data.city}`,
+    `Adresse: ${data.address}`,
+    `Livraison: ${data.shippingFee} DH`,
+    `Email: ${data.email || "-"}`,
+    `Note client: ${data.notes || "-"}`,
+    "",
+    "Source: AL FAJR COD Express",
+  ].join("\n");
 }
 
-export async function action({ request }) {
-  const logger = createLogger({
-    endpoint: "api.cod",
-    method: request.method
-  });
+function buildTrackingAttributes(data) {
+  const pairs = [
+    ["UTM Source", data.utmSource],
+    ["UTM Medium", data.utmMedium],
+    ["UTM Campaign", data.utmCampaign],
+    ["UTM Content", data.utmContent],
+    ["UTM Term", data.utmTerm],
+    ["Facebook Click ID", data.fbclid],
+    ["Landing page", data.landingPage],
+    ["Referrer", data.referrer],
+  ];
 
-  let idempotencyKey;
+  return pairs
+    .filter(([, value]) => Boolean(value))
+    .map(([key, value]) => ({ key, value: String(value).slice(0, 500) }));
+}
+
+async function readJsonBody(request) {
+  const rawBody = await request.text();
+
+  if (Buffer.byteLength(rawBody, "utf8") > MAX_BODY_BYTES) {
+    const error = new Error("Request body is too large");
+    error.status = 413;
+    throw error;
+  }
 
   try {
-    const data = await request.json();
+    return JSON.parse(rawBody || "{}");
+  } catch {
+    const error = new Error("Invalid JSON body");
+    error.status = 400;
+    throw error;
+  }
+}
 
-    const shop =
-      data.shop ||
-      new URL(request.url).searchParams.get("shop") ||
-      "alfajr-wex5ddvj.myshopify.com";
-
-    logger.info("COD order request received", { shop });
-
-    if (!shop) {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          message: "Missing shop domain"
-        }),
-        {
-          status: 422,
-          headers: corsHeaders
-        }
-      );
-    }
-
-    const { allowed, remaining, resetTime } = checkRateLimit(shop, 20, 60);
-
-    if (!allowed) {
-      logger.warn("Rate limit exceeded", { shop, remaining });
-
-      return new Response(
-        JSON.stringify({
-          success: false,
-          message: "Trop de tentatives. Veuillez réessayer plus tard."
-        }),
-        {
-          status: 429,
-          headers: {
-            ...corsHeaders,
-            "Retry-After": Math.ceil((resetTime - Date.now()) / 1000).toString()
-          }
-        }
-      );
-    }
-
-    idempotencyKey =
-      request.headers.get("idempotency-key") || generateIdempotencyKey();
-
-    const existingRequest = await prisma.idempotentRequest.findUnique({
-      where: { idempotencyKey }
-    });
-
-    if (existingRequest) {
-      if (existingRequest.status === "completed") {
-        return new Response(JSON.stringify(existingRequest.response), {
-          status: 200,
-          headers: corsHeaders
-        });
-      }
-
-      if (existingRequest.status === "failed") {
-        return new Response(JSON.stringify(existingRequest.response), {
-          status: 400,
-          headers: corsHeaders
-        });
-      }
-
-      return new Response(
-        JSON.stringify({
-          success: false,
-          message: "La commande est encore en cours de traitement."
-        }),
-        {
-          status: 409,
-          headers: corsHeaders
-        }
-      );
-    }
-
-    const validation = validateCodOrder(data);
-
-    if (!validation.success) {
-      const failedResponse = {
-        success: false,
-        message: "Validation failed",
-        errors: validation.errors
-      };
-
-      await prisma.idempotentRequest.create({
-        data: {
-          idempotencyKey,
-          shop,
-          status: "failed",
-          response: failedResponse,
-          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
-        }
-      });
-
-      return new Response(JSON.stringify(failedResponse), {
-        status: 422,
-        headers: corsHeaders
-      });
-    }
-
-    const validatedData = {
-      ...validation.data,
-      phone: normalizePhone(validation.data.phone),
-      shippingFee: Number(validation.data.shippingFee || 35),
-      email: data.email || "",
-      notes: data.notes || ""
-    };
-
+async function claimIdempotency({ idempotencyKey, shop }) {
+  try {
     await prisma.idempotentRequest.create({
       data: {
         idempotencyKey,
         shop,
         status: "processing",
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
-      }
+        expiresAt: new Date(Date.now() + IDEMPOTENCY_TTL_MS),
+      },
     });
 
-    const { admin } = await unauthenticated.admin(shop);
+    return { claimed: true, existing: null };
+  } catch (error) {
+    if (error?.code !== "P2002") throw error;
+
+    const existing = await prisma.idempotentRequest.findUnique({
+      where: { idempotencyKey },
+    });
+
+    return { claimed: false, existing };
+  }
+}
+
+export async function loader() {
+  return json(
+    {
+      success: false,
+      message: "Method not allowed",
+    },
+    405,
+    { Allow: "POST" },
+  );
+}
+
+export async function action({ request }) {
+  const logger = createLogger({ endpoint: "api.cod", method: request.method });
+
+  let idempotencyKey;
+  let shop;
+  let orderWasCreated = false;
+
+  try {
+    const proxyContext = await authenticate.public.appProxy(request);
+    const { admin, session } = proxyContext;
+
+    if (!admin || !session?.shop) {
+      return json(
+        {
+          success: false,
+          message: "Application non autorisée pour cette boutique.",
+        },
+        401,
+      );
+    }
+
+    shop = session.shop;
+    const clientIp = getClientIp(request);
+    const rateLimit = checkCodRateLimits({ shop, clientIp });
+
+    if (!rateLimit.allowed) {
+      logger.warn("COD rate limit exceeded", { shop, clientIp });
+
+      return json(
+        {
+          success: false,
+          message: "Trop de tentatives. Veuillez réessayer dans un moment.",
+        },
+        429,
+        {
+          "Retry-After": Math.max(
+            1,
+            Math.ceil((rateLimit.resetTime - Date.now()) / 1000),
+          ).toString(),
+        },
+      );
+    }
+
+    const submittedData = await readJsonBody(request);
+    const validation = validateCodOrder(submittedData);
+
+    if (!validation.success) {
+      logger.warn("COD validation failed", {
+        shop,
+        errors: validation.errors,
+      });
+
+      return json(
+        {
+          success: false,
+          message: "Veuillez vérifier les informations saisies.",
+          errors: validation.errors,
+        },
+        422,
+      );
+    }
+
+    const data = validation.data;
+
+    // Honeypot and timing checks are intentionally generic to bots.
+    if (data.website) {
+      return json({ success: true, message: "Order received" });
+    }
+
+    if (
+      data.formStartedAt &&
+      Date.now() - data.formStartedAt >= 0 &&
+      Date.now() - data.formStartedAt < 650
+    ) {
+      return json(
+        {
+          success: false,
+          message: "Veuillez vérifier les informations saisies.",
+        },
+        422,
+      );
+    }
+
+    idempotencyKey =
+      data.idempotencyKey ||
+      request.headers.get("idempotency-key") ||
+      randomUUID();
+
+    const idempotency = await claimIdempotency({ idempotencyKey, shop });
+
+    if (!idempotency.claimed) {
+      const existing = idempotency.existing;
+
+      if (existing?.status === "completed" && existing.response) {
+        return json(existing.response, 200);
+      }
+
+      if (existing?.status === "failed" && existing.response) {
+        return json(existing.response, 400);
+      }
+
+      return json(
+        {
+          success: false,
+          processing: true,
+          message: "Votre commande est déjà en cours de traitement.",
+        },
+        409,
+      );
+    }
+
+    const phone = normalizePhone(data.phone);
+    const shippingFee = getShippingFee(data.city);
+    const shippingTag = buildShippingTag(data.city);
+    const { firstName, lastName } = splitFullName(data.fullName);
+
+    const items =
+      data.items?.length > 0
+        ? data.items
+        : [
+            {
+              variantId: data.variantId,
+              quantity: data.quantity || 1,
+            },
+          ];
 
     const mutation = `
       mutation orderCreate($order: OrderCreateOrderInput!) {
@@ -220,6 +274,12 @@ export async function action({ request }) {
             name
             displayFinancialStatus
             displayFulfillmentStatus
+            totalPriceSet {
+              shopMoney {
+                amount
+                currencyCode
+              }
+            }
           }
           userErrors {
             field
@@ -229,58 +289,68 @@ export async function action({ request }) {
       }
     `;
 
-    const items =
-      validatedData.items && validatedData.items.length > 0
-        ? validatedData.items
-        : [
-            {
-              variantId: validatedData.variantId,
-              quantity: validatedData.quantity || 1
-            }
-          ];
-
-    const shippingTag = buildShippingTag(
-      validatedData.city,
-      validatedData.shippingFee
-    );
+    const customAttributes = [
+      { key: "Nom complet", value: data.fullName },
+      { key: "Téléphone", value: phone },
+      { key: "Ville", value: data.city },
+      { key: "Adresse", value: data.address },
+      { key: "Livraison", value: `${shippingFee} DH` },
+      { key: "Email", value: data.email || "-" },
+      { key: "Note client", value: data.notes || "-" },
+      { key: "Source", value: "AL FAJR COD Express" },
+      { key: "COD Request ID", value: idempotencyKey },
+      ...buildTrackingAttributes(data),
+    ];
 
     const variables = {
       order: {
         lineItems: items.map((item) => ({
           variantId: `gid://shopify/ProductVariant/${item.variantId}`,
-          quantity: Number(item.quantity || 1)
+          quantity: Number(item.quantity || 1),
         })),
-
         financialStatus: "PENDING",
-
+        fulfillmentStatus: "UNFULFILLED",
+        currency: "MAD",
+        phone,
+        ...(data.email ? { email: data.email } : {}),
         tags: [
           "COD",
           "ALFAJR-COD-EXPRESS",
           shippingTag,
-          validatedData.city ? `CITY-${validatedData.city}` : "CITY-UNKNOWN"
+          `CITY-${data.city}`.slice(0, 255),
+          `COD-ID-${idempotencyKey.slice(0, 36)}`,
         ],
-
-        note: buildOrderNote(validatedData),
-
+        note: buildOrderNote({
+          ...data,
+          phone,
+          shippingFee,
+        }),
         shippingAddress: {
-          firstName: validatedData.fullName,
-          address1: validatedData.address,
-          city: validatedData.city,
-          phone: validatedData.phone,
-          countryCode: "MA"
+          firstName,
+          ...(lastName ? { lastName } : {}),
+          address1: data.address,
+          city: data.city,
+          phone,
+          countryCode: "MA",
         },
-
-        customAttributes: [
-          { key: "Nom complet", value: validatedData.fullName },
-          { key: "Téléphone", value: validatedData.phone },
-          { key: "Ville", value: validatedData.city },
-          { key: "Adresse", value: validatedData.address },
-          { key: "Livraison", value: `${validatedData.shippingFee} DH` },
-          { key: "Email", value: validatedData.email || "-" },
-          { key: "Note client", value: validatedData.notes || "-" },
-          { key: "Source", value: "AL FAJR COD Express" }
-        ]
-      }
+        shippingLines: [
+          {
+            title:
+              shippingFee === 20
+                ? "Livraison Fès"
+                : "Livraison Maroc",
+            code: shippingTag,
+            source: "AL FAJR COD",
+            priceSet: {
+              shopMoney: {
+                amount: shippingFee.toFixed(2),
+                currencyCode: "MAD",
+              },
+            },
+          },
+        ],
+        customAttributes,
+      },
     };
 
     const shopifyResponse = await admin.graphql(mutation, { variables });
@@ -288,97 +358,136 @@ export async function action({ request }) {
     const result = responseJson?.data?.orderCreate;
 
     if (!result) {
-      throw new Error("orderCreate mutation did not return expected response");
+      throw new Error("Shopify did not return an orderCreate result");
     }
 
-    if (result.userErrors && result.userErrors.length > 0) {
+    if (result.userErrors?.length > 0) {
       const errorResponse = {
         success: false,
-        message: "Failed to create order",
-        errors: result.userErrors
+        message: "La commande n'a pas pu être créée.",
+        errors: result.userErrors,
       };
 
       await prisma.idempotentRequest.update({
         where: { idempotencyKey },
-        data: {
-          status: "failed",
-          response: errorResponse
-        }
+        data: { status: "failed", response: errorResponse },
       });
 
-      return new Response(JSON.stringify(errorResponse), {
-        status: 400,
-        headers: corsHeaders
+      logger.warn("Shopify orderCreate returned user errors", {
+        shop,
+        errors: result.userErrors,
       });
+
+      return json(errorResponse, 400);
     }
 
-    const orderTotal =
-      Number(validatedData.total || 0) ||
-      Number(validatedData.subtotal || 0) + Number(validatedData.shippingFee || 0);
+    orderWasCreated = true;
 
-    await prisma.codOrder.create({
-      data: {
-        shop,
-        shopifyOrderId: result.order?.id || null,
-        customerName: validatedData.fullName,
-        customerPhone: validatedData.phone,
-        city: validatedData.city,
-        shippingFee: validatedData.shippingFee,
-        total: orderTotal || validatedData.shippingFee || 0,
-        status: "pending"
-      }
-    });
+    const totalAmount = Number(
+      result.order?.totalPriceSet?.shopMoney?.amount || shippingFee,
+    );
 
     const successResponse = {
       success: true,
-      message: "Order created successfully",
-      order: result.order
+      message: "Votre commande a été enregistrée avec succès.",
+      order: {
+        id: result.order?.id,
+        name: result.order?.name,
+        financialStatus: result.order?.displayFinancialStatus,
+        fulfillmentStatus: result.order?.displayFulfillmentStatus,
+        total: totalAmount,
+        currency:
+          result.order?.totalPriceSet?.shopMoney?.currencyCode || "MAD",
+      },
+      shippingFee,
     };
 
-    await prisma.idempotentRequest.update({
-      where: { idempotencyKey },
-      data: {
-        status: "completed",
-        response: successResponse
-      }
-    });
+    // The Shopify order is the source of truth. A secondary logging failure
+    // must never tell the customer that a successfully-created order failed.
+    try {
+      await prisma.$transaction([
+        prisma.codOrder.create({
+          data: {
+            shop,
+            shopifyOrderId: result.order?.id || null,
+            customerName: data.fullName,
+            customerPhone: phone,
+            city: data.city,
+            shippingFee,
+            total: totalAmount,
+            status: "pending",
+          },
+        }),
+        prisma.idempotentRequest.update({
+          where: { idempotencyKey },
+          data: { status: "completed", response: successResponse },
+        }),
+      ]);
+    } catch (databaseLoggingError) {
+      logger.error("Order created but post-order database logging failed", {
+        shop,
+        orderId: result.order?.id,
+        message: databaseLoggingError?.message,
+      });
+    }
 
-    logger.info("Order created successfully", {
+    logger.info("COD order created successfully", {
+      shop,
       orderId: result.order?.id,
-      orderName: result.order?.name
+      orderName: result.order?.name,
+      shippingFee,
     });
 
-    return new Response(JSON.stringify(successResponse), {
-      status: 200,
-      headers: corsHeaders
-    });
+    return json(successResponse, 200);
   } catch (error) {
-    logger.error("COD API error", error);
+    if (error instanceof Response) return error;
 
-    if (idempotencyKey) {
+    const status = Number(error?.status) || 500;
+    logger.error("COD API error", {
+      shop,
+      idempotencyKey,
+      orderWasCreated,
+      message: error?.message,
+      stack: error?.stack,
+    });
+
+    if (idempotencyKey && !orderWasCreated) {
+      const failureResponse = {
+        success: false,
+        message:
+          status < 500
+            ? error.message
+            : "Une erreur temporaire est survenue. Veuillez réessayer.",
+      };
+
       try {
         await prisma.idempotentRequest.update({
           where: { idempotencyKey },
-          data: {
-            status: "failed",
-            response: {
-              success: false,
-              message: error.message || "Internal server error"
-            }
-          }
+          data: { status: "failed", response: failureResponse },
         });
-      } catch (_) {}
+      } catch {
+        // Nothing else to do; the original error is already logged.
+      }
     }
 
-    return new Response(
-      JSON.stringify({
-        success: false,
-        message: "Internal server error"
-      }),
+    // If Shopify created the order, never encourage the customer to submit it
+    // again even if optional post-processing failed.
+    if (orderWasCreated) {
+      return json({
+        success: true,
+        message: "Votre commande a été enregistrée avec succès.",
+      });
+    }
+
+    return json(
       {
-        status: 500,
-        headers: corsHeaders
-      }
+        success: false,
+        message:
+          status < 500
+            ? error.message
+            : "Une erreur temporaire est survenue. Veuillez réessayer.",
+      },
+      status,
     );
   }
 }

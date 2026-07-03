@@ -42,6 +42,12 @@
       <form id="alfajr-cart-form" class="alfajr-cart-form" novalidate>
         <input type="hidden" name="shop" value="{{ shop.myshopify_domain }}">
         <input type="hidden" name="success_page" value="{{ success_page }}">
+        <input type="hidden" name="form_started_at" value="">
+        <input type="hidden" name="idempotency_key" value="">
+        <div style="position:absolute;left:-10000px;width:1px;height:1px;overflow:hidden" aria-hidden="true">
+          <label>Website</label>
+          <input type="text" name="website" tabindex="-1" autocomplete="off">
+        </div>
 
         {% if alfajr_cod_settings.showFullName == nil or alfajr_cod_settings.showFullName %}
           <div class="alfajr-cart-field">
@@ -445,24 +451,32 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function normalizeCity(city) {
     return String(city || "")
-      .toLowerCase()
+      .toLocaleLowerCase("fr-MA")
       .trim()
       .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "");
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, "")
+      .replace(/[أإآٱ]/g, "ا")
+      .replace(/ـ/g, "")
+      .replace(/[،؛؟]/g, " ")
+      .replace(/([a-z\u0600-\u06ff])\1+/gu, "$1")
+      .replace(/[^a-z0-9\u0600-\u06ff]+/gu, " ")
+      .trim();
+  }
+
+  function isFesCity(city) {
+    const fesAliases = new Set(["fes", "fez", "fas", "فاس", "فس"]);
+    const normalizedCity = normalizeCity(city);
+
+    if (!normalizedCity) return false;
+
+    return normalizedCity
+      .split(/\s+/)
+      .some((token) => fesAliases.has(token));
   }
 
   function getShippingFee(city) {
-    const normalizedCity = normalizeCity(city);
-
-    if (
-      normalizedCity.includes("fes") ||
-      normalizedCity.includes("fez") ||
-      normalizedCity.includes("فاس")
-    ) {
-      return 20;
-    }
-
-    return 35;
+    return isFesCity(city) ? 20 : 35;
   }
 
   function updateSummary(cart) {
@@ -557,6 +571,8 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   openBtn.addEventListener("click", async () => {
+    form.form_started_at.value = String(Date.now());
+    form.idempotency_key.value = window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
     modal.style.display = "block";
     document.body.style.overflow = "hidden";
     await loadCart();
@@ -597,24 +613,33 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const totals = updateSummary(cart);
 
+    const params = new URLSearchParams(window.location.search);
+    const idempotencyKey = form.idempotency_key.value || (window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`);
+    form.idempotency_key.value = idempotencyKey;
+
     const data = {
-      shop: form.shop.value,
       fullName: form.full_name?.value || "",
       phone: normalizePhone(form.phone?.value || ""),
       city: form.city?.value || "",
       address: form.address?.value || "",
       email: form.email?.value || "",
       notes: form.notes?.value || "",
-      shippingFee: totals.shipping,
-      subtotal: totals.subtotal,
-      total: totals.total,
+      website: form.website?.value || "",
+      formStartedAt: Number(form.form_started_at?.value || Date.now()),
+      idempotencyKey,
+      utmSource: params.get("utm_source") || "",
+      utmMedium: params.get("utm_medium") || "",
+      utmCampaign: params.get("utm_campaign") || "",
+      utmContent: params.get("utm_content") || "",
+      utmTerm: params.get("utm_term") || "",
+      fbclid: params.get("fbclid") || "",
+      landingPage: window.location.href.slice(0, 500),
+      referrer: document.referrer.slice(0, 500),
       items: cart.items.map((i) => ({
         variantId: String(i.variant_id),
         quantity: Number(i.quantity || 1)
       }))
     };
-
-    const idempotencyKey = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     try {
       btn.disabled = true;
@@ -623,8 +648,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const response = await fetch("/apps/alfajr-cod/api/cod", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          "idempotency-key": idempotencyKey
+          "Content-Type": "application/json"
         },
         body: JSON.stringify(data)
       });

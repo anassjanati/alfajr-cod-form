@@ -6,903 +6,858 @@
 {% assign alfajr_button_text_color = alfajr_cod_settings.buttonTextColor | default: block.settings.button_text_color %}
 {% assign alfajr_button_width = alfajr_cod_settings.buttonWidth | default: "100%" %}
 {% assign alfajr_border_radius = alfajr_cod_settings.borderRadius | default: 14 %}
-
-{% assign alfajr_form_theme = alfajr_cod_settings.formTheme | default: "premium" %}
 {% assign alfajr_form_bg = alfajr_cod_settings.formBackgroundColor | default: block.settings.background_color %}
 {% assign alfajr_form_text = alfajr_cod_settings.formTextColor | default: "#111827" %}
 {% assign alfajr_form_border = alfajr_cod_settings.formBorderColor | default: "#E5E7EB" %}
 {% assign alfajr_form_accent = alfajr_cod_settings.formAccentColor | default: alfajr_button_color %}
-
 {% assign alfajr_popup_title = alfajr_cod_settings.popupTitle | default: block.settings.title %}
-{% assign alfajr_success_page = alfajr_cod_settings.successPageUrl | default: "/pages/merci-commande" %}
 {% assign alfajr_custom_css = alfajr_cod_settings.customCss | default: "" %}
 
-<div class="alfajr-cod-box alfajr-theme-{{ alfajr_form_theme }}" id="alfajr-cod-box">
-  <button type="button" id="alfajr-open-product-cod" class="alfajr-main-cod-btn">
-    <span class="alfajr-btn-icon">{{ alfajr_button_icon }}</span>
+<div
+  class="alfajr-cod-v2"
+  data-alfajr-cod-root="{{ block.id }}"
+  data-default-variant="{{ product.selected_or_first_available_variant.id }}"
+>
+  <button type="button" class="alfajr-cod-v2__open" data-cod-open>
+    <span aria-hidden="true">{{ alfajr_button_icon }}</span>
     <span>{{ alfajr_button_text }}</span>
   </button>
 
-  <div class="alfajr-product-modal" id="alfajr-product-modal">
-    <div class="alfajr-product-modal-content">
-      <button type="button" class="alfajr-product-close" id="alfajr-product-close">×</button>
+  <div class="alfajr-cod-v2__overlay" data-cod-overlay aria-hidden="true">
+    <section
+      class="alfajr-cod-v2__dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="alfajr-cod-title-{{ block.id }}"
+    >
+      <button
+        type="button"
+        class="alfajr-cod-v2__close"
+        data-cod-close
+        aria-label="Fermer"
+      >×</button>
 
-      <div class="alfajr-cod-header">
-        <div>
-          <h3>{{ alfajr_popup_title }}</h3>
-          <p>Remplissez vos informations pour confirmer votre commande.</p>
+      <div data-cod-form-panel>
+        <header class="alfajr-cod-v2__header">
+          <span class="alfajr-cod-v2__eyebrow">Paiement à la livraison</span>
+          <h2 id="alfajr-cod-title-{{ block.id }}">{{ alfajr_popup_title }}</h2>
+          <p>Remplissez les informations ci-dessous. La commande sera confirmée par téléphone.</p>
+        </header>
+
+        <div class="alfajr-cod-v2__product">
+          <img
+            src="{{ product.featured_image | image_url: width: 180 }}"
+            alt="{{ product.title | escape }}"
+            width="72"
+            height="72"
+            loading="lazy"
+          >
+          <div>
+            <strong>{{ product.title }}</strong>
+            <span>Livraison à Fès 20 DH • Autres villes 35 DH</span>
+          </div>
         </div>
-      </div>
 
-      <div class="alfajr-product-preview">
-        <img
-          src="{{ product.featured_image | image_url: width: 300 }}"
-          alt="{{ product.title | escape }}"
-          width="68"
-          height="68"
-        >
-        <div>
-          <strong>{{ product.title }}</strong>
-          <span>Paiement à la livraison • Confirmation rapide</span>
-        </div>
-      </div>
+        <form class="alfajr-cod-v2__form" data-cod-form novalidate>
+          <input type="hidden" name="variant_id" value="{{ product.selected_or_first_available_variant.id }}">
+          <input type="hidden" name="form_started_at" value="">
+          <input type="hidden" name="idempotency_key" value="">
 
-      <div class="alfajr-trust-badges">
-        <span>✓ Paiement à la livraison</span>
-        <span>✓ Livraison partout au Maroc</span>
-        <span>✓ Confirmation rapide</span>
-      </div>
-
-      <form class="alfajr-cod-form" id="alfajr-cod-form" novalidate>
-        <input type="hidden" name="shop" value="{{ shop.myshopify_domain }}">
-        <input type="hidden" name="product_id" value="{{ product.id }}">
-        <input type="hidden" name="variant_id" value="{{ product.selected_or_first_available_variant.id }}">
-        <input type="hidden" name="product_title" value="{{ product.title | escape }}">
-        <input type="hidden" name="product_image" value="{{ product.featured_image | image_url: width: 300 }}">
-        <input type="hidden" name="success_page" value="{{ alfajr_success_page }}">
-
-        <div class="alfajr-step active" id="alfajr-step-1">
-          <div class="alfajr-step-pill">Étape 1/2</div>
-          <div class="alfajr-step-title">Votre commande</div>
+          <div class="alfajr-cod-v2__honeypot" aria-hidden="true">
+            <label>Website</label>
+            <input type="text" name="website" tabindex="-1" autocomplete="off">
+          </div>
 
           {% if alfajr_cod_settings.showQuantity == nil or alfajr_cod_settings.showQuantity %}
-            <div class="alfajr-field">
-              <label>Quantité</label>
-              <div class="alfajr-qty-control">
-                <button type="button" id="alfajr-qty-minus">−</button>
-                <input type="number" name="quantity" min="1" value="1" required>
-                <button type="button" id="alfajr-qty-plus">+</button>
+            <div class="alfajr-cod-v2__field alfajr-cod-v2__field--quantity">
+              <label for="alfajr-qty-{{ block.id }}">Quantité</label>
+              <div class="alfajr-cod-v2__quantity">
+                <button type="button" data-qty-minus aria-label="Réduire la quantité">−</button>
+                <input
+                  id="alfajr-qty-{{ block.id }}"
+                  type="number"
+                  name="quantity"
+                  value="1"
+                  min="1"
+                  max="100"
+                  inputmode="numeric"
+                  required
+                >
+                <button type="button" data-qty-plus aria-label="Augmenter la quantité">+</button>
               </div>
             </div>
           {% else %}
             <input type="hidden" name="quantity" value="1">
           {% endif %}
 
-          <div id="alfajr-order-summary" class="alfajr-order-summary">
-            <div class="alfajr-line">
-              <span>Sous-total</span>
-              <strong id="alfajr-subtotal">0 DH</strong>
-            </div>
+          <div class="alfajr-cod-v2__grid">
+            {% if alfajr_cod_settings.showFullName == nil or alfajr_cod_settings.showFullName %}
+              <div class="alfajr-cod-v2__field">
+                <label for="alfajr-name-{{ block.id }}">Nom complet</label>
+                <input
+                  id="alfajr-name-{{ block.id }}"
+                  type="text"
+                  name="full_name"
+                  placeholder="Ex: Mohamed Amrani"
+                  autocomplete="name"
+                  maxlength="120"
+                  required
+                >
+                <small data-error-for="full_name"></small>
+              </div>
+            {% endif %}
 
-            <div class="alfajr-line">
-              <span>Livraison</span>
-              <strong id="alfajr-shipping">35 DH</strong>
-            </div>
+            {% if alfajr_cod_settings.showPhone == nil or alfajr_cod_settings.showPhone %}
+              <div class="alfajr-cod-v2__field">
+                <label for="alfajr-phone-{{ block.id }}">Téléphone</label>
+                <input
+                  id="alfajr-phone-{{ block.id }}"
+                  type="tel"
+                  name="phone"
+                  placeholder="Ex: 0612345678"
+                  autocomplete="tel"
+                  inputmode="tel"
+                  maxlength="20"
+                  required
+                >
+                <small data-error-for="phone"></small>
+              </div>
+            {% endif %}
 
-            <div class="alfajr-line alfajr-total">
-              <span>Total à payer</span>
-              <strong id="alfajr-total">0 DH</strong>
-            </div>
+            {% if alfajr_cod_settings.showCity == nil or alfajr_cod_settings.showCity %}
+              <div class="alfajr-cod-v2__field">
+                <label for="alfajr-city-{{ block.id }}">Ville</label>
+                <input
+                  id="alfajr-city-{{ block.id }}"
+                  type="text"
+                  name="city"
+                  placeholder="Ex: Fès, Casablanca..."
+                  autocomplete="address-level2"
+                  list="alfajr-cities-{{ block.id }}"
+                  maxlength="100"
+                  required
+                >
+                <datalist id="alfajr-cities-{{ block.id }}">
+                  <option value="Fès">
+                  <option value="Casablanca">
+                  <option value="Rabat">
+                  <option value="Marrakech">
+                  <option value="Tanger">
+                  <option value="Agadir">
+                  <option value="Meknès">
+                  <option value="Oujda">
+                  <option value="Kénitra">
+                  <option value="Tétouan">
+                  <option value="Safi">
+                  <option value="El Jadida">
+                  <option value="Nador">
+                  <option value="Béni Mellal">
+                  <option value="Taza">
+                  <option value="Settat">
+                  <option value="Khouribga">
+                  <option value="Errachidia">
+                  <option value="Laâyoune">
+                  <option value="Dakhla">
+                </datalist>
+                <small data-error-for="city"></small>
+              </div>
+            {% endif %}
+
+            {% if alfajr_cod_settings.showAddress == nil or alfajr_cod_settings.showAddress %}
+              <div class="alfajr-cod-v2__field alfajr-cod-v2__field--wide">
+                <label for="alfajr-address-{{ block.id }}">Adresse complète</label>
+                <textarea
+                  id="alfajr-address-{{ block.id }}"
+                  name="address"
+                  placeholder="Quartier, rue, numéro de maison..."
+                  autocomplete="street-address"
+                  maxlength="500"
+                  required
+                ></textarea>
+                <small data-error-for="address"></small>
+              </div>
+            {% endif %}
+
+            {% if alfajr_cod_settings.showEmail %}
+              <div class="alfajr-cod-v2__field alfajr-cod-v2__field--wide">
+                <label for="alfajr-email-{{ block.id }}">Email <span>(optionnel)</span></label>
+                <input
+                  id="alfajr-email-{{ block.id }}"
+                  type="email"
+                  name="email"
+                  placeholder="email@example.com"
+                  autocomplete="email"
+                  maxlength="254"
+                >
+                <small data-error-for="email"></small>
+              </div>
+            {% endif %}
+
+            {% if alfajr_cod_settings.showNotes %}
+              <div class="alfajr-cod-v2__field alfajr-cod-v2__field--wide">
+                <label for="alfajr-notes-{{ block.id }}">Note <span>(optionnel)</span></label>
+                <textarea
+                  id="alfajr-notes-{{ block.id }}"
+                  name="notes"
+                  placeholder="Ajoutez une note si nécessaire..."
+                  maxlength="1000"
+                ></textarea>
+              </div>
+            {% endif %}
           </div>
 
-          <button type="button" id="alfajr-next-step" class="alfajr-submit-btn">
-            Continuer →
+          <div class="alfajr-cod-v2__summary" aria-live="polite">
+            <div><span>Sous-total</span><strong data-cod-subtotal>0 DH</strong></div>
+            <div><span>Livraison</span><strong data-cod-shipping>35 DH</strong></div>
+            <div class="alfajr-cod-v2__total"><span>Total à payer</span><strong data-cod-total>0 DH</strong></div>
+          </div>
+
+          <button type="submit" class="alfajr-cod-v2__submit" data-cod-submit>
+            <span data-submit-label>Confirmer ma commande</span>
+            <span class="alfajr-cod-v2__spinner" data-submit-spinner hidden aria-hidden="true"></span>
           </button>
-        </div>
 
-        <div class="alfajr-step" id="alfajr-step-2">
-          <div class="alfajr-step-pill">Étape 2/2</div>
-          <div class="alfajr-step-title">Informations de livraison</div>
+          <p class="alfajr-cod-v2__status" data-cod-status role="alert" aria-live="assertive"></p>
+          <p class="alfajr-cod-v2__secure">✓ Paiement à la livraison · ✓ Confirmation téléphonique · ✓ Livraison partout au Maroc</p>
+        </form>
+      </div>
 
-          {% if alfajr_cod_settings.showFullName == nil or alfajr_cod_settings.showFullName %}
-            <div class="alfajr-field">
-              <label>Nom complet</label>
-              <input type="text" name="full_name" placeholder="Ex: Mohamed Amrani" required>
-              <small class="alfajr-error" data-error-for="full_name"></small>
-            </div>
-          {% endif %}
-
-          {% if alfajr_cod_settings.showPhone == nil or alfajr_cod_settings.showPhone %}
-            <div class="alfajr-field">
-              <label>Téléphone</label>
-              <input type="tel" name="phone" placeholder="Ex: 0612345678" required>
-              <small class="alfajr-error" data-error-for="phone"></small>
-            </div>
-          {% endif %}
-
-          {% if alfajr_cod_settings.showCity == nil or alfajr_cod_settings.showCity %}
-            <div class="alfajr-field">
-              <label>Ville</label>
-              <input
-                type="text"
-                name="city"
-                placeholder="Ex: Fès, Casablanca, Rabat..."
-                list="alfajr-morocco-cities"
-                required
-              >
-              <datalist id="alfajr-morocco-cities">
-                <option value="Fès">
-                <option value="Casablanca">
-                <option value="Rabat">
-                <option value="Marrakech">
-                <option value="Tanger">
-                <option value="Agadir">
-                <option value="Meknès">
-                <option value="Oujda">
-                <option value="Kénitra">
-                <option value="Tétouan">
-                <option value="Safi">
-                <option value="El Jadida">
-                <option value="Nador">
-                <option value="Béni Mellal">
-                <option value="Taza">
-                <option value="Settat">
-                <option value="Khouribga">
-                <option value="Errachidia">
-                <option value="Laâyoune">
-                <option value="Dakhla">
-              </datalist>
-              <small class="alfajr-error" data-error-for="city"></small>
-            </div>
-          {% endif %}
-
-          {% if alfajr_cod_settings.showAddress == nil or alfajr_cod_settings.showAddress %}
-            <div class="alfajr-field">
-              <label>Adresse complète</label>
-              <textarea name="address" placeholder="Quartier, rue, numéro de maison..." required></textarea>
-              <small class="alfajr-error" data-error-for="address"></small>
-            </div>
-          {% endif %}
-
-          {% if alfajr_cod_settings.showEmail %}
-            <div class="alfajr-field">
-              <label>Email</label>
-              <input type="email" name="email" placeholder="email@example.com">
-              <small class="alfajr-error" data-error-for="email"></small>
-            </div>
-          {% endif %}
-
-          {% if alfajr_cod_settings.showNotes %}
-            <div class="alfajr-field">
-              <label>Note client</label>
-              <textarea name="notes" placeholder="Ajoutez une note si nécessaire..."></textarea>
-            </div>
-          {% endif %}
-
-          <div class="alfajr-step-actions">
-            <button type="button" id="alfajr-back-step" class="alfajr-back-btn">
-              ← Retour
-            </button>
-
-            <button type="submit" id="alfajr-submit-btn" class="alfajr-submit-btn">
-              Confirmer ma commande
-            </button>
-          </div>
-        </div>
-
-        <p class="alfajr-secure-note">
-          Votre commande sera confirmée par téléphone avant l’expédition.
-        </p>
-      </form>
-    </div>
+      <div class="alfajr-cod-v2__success" data-cod-success hidden>
+        <div class="alfajr-cod-v2__success-icon">✓</div>
+        <h2>Commande enregistrée</h2>
+        <p>Merci. Nous vous contacterons rapidement pour confirmer votre commande.</p>
+        <strong data-cod-order-name></strong>
+        <button type="button" data-cod-success-close>Continuer mes achats</button>
+      </div>
+    </section>
   </div>
-</div>
 
-<style>
-  .alfajr-cod-box {
-    margin-top: 18px;
-  }
-
-  .alfajr-main-cod-btn {
-    width: {{ alfajr_button_width }};
-    background: {{ alfajr_button_color }};
-    color: {{ alfajr_button_text_color }};
-    border: none;
-    border-radius: {{ alfajr_border_radius }}px;
-    padding: 16px 18px;
-    font-size: 16px;
-    font-weight: 950;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 9px;
-    box-shadow: 0 14px 32px rgba(13,71,199,0.22);
-    transition: .22s ease;
-  }
-
-  .alfajr-main-cod-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 18px 42px rgba(13,71,199,0.28);
-  }
-
-  .alfajr-product-modal {
-    position: fixed;
-    inset: 0;
-    background: rgba(15,23,42,.62);
-    display: none;
-    z-index: 999999;
-    padding: 18px;
-    overflow-y: auto;
-  }
-
-  .alfajr-product-modal-content {
-    max-width: 590px;
-    margin: 32px auto;
-    background: {{ alfajr_form_bg }};
-    color: {{ alfajr_form_text }};
-    border: 1px solid {{ alfajr_form_border }};
-    border-radius: {{ alfajr_border_radius | plus: 10 }}px;
-    padding: 22px;
-    position: relative;
-    box-shadow: 0 30px 90px rgba(0,0,0,.24);
-    max-height: 90vh;
-    overflow-y: auto;
-  }
-
-  .alfajr-theme-glass .alfajr-product-modal-content {
-    backdrop-filter: blur(28px);
-    -webkit-backdrop-filter: blur(28px);
-    background: {{ alfajr_form_bg }};
-    border: 1px solid rgba(255,255,255,.45);
-  }
-
-  .alfajr-theme-dark .alfajr-product-modal-content {
-    box-shadow: 0 30px 100px rgba(0,0,0,.45);
-  }
-
-  .alfajr-product-close {
-    position: absolute;
-    top: 14px;
-    right: 16px;
-    background: rgba(148,163,184,.18);
-    border: none;
-    color: inherit;
-    width: 38px;
-    height: 38px;
-    border-radius: 50%;
-    font-size: 24px;
-    font-weight: 900;
-    cursor: pointer;
-  }
-
-  .alfajr-cod-header h3 {
-    margin: 0 46px 4px 0;
-    font-size: 23px;
-    font-weight: 950;
-    letter-spacing: -.3px;
-  }
-
-  .alfajr-cod-header p {
-    margin: 0 0 16px;
-    color: color-mix(in srgb, {{ alfajr_form_text }} 68%, transparent);
-    font-size: 14px;
-  }
-
-  .alfajr-product-preview {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    background: rgba(13,71,199,.06);
-    border: 1px solid rgba(13,71,199,.12);
-    border-radius: 18px;
-    padding: 12px;
-    margin-bottom: 12px;
-  }
-
-  .alfajr-product-preview img {
-    width: 68px;
-    height: 68px;
-    border-radius: 14px;
-    object-fit: cover;
-    background: #fff;
-  }
-
-  .alfajr-product-preview strong {
-    display: block;
-    font-weight: 950;
-    line-height: 1.25;
-  }
-
-  .alfajr-product-preview span {
-    display: block;
-    margin-top: 4px;
-    font-size: 13px;
-    opacity: .74;
-  }
-
-  .alfajr-trust-badges {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-    margin: 12px 0 14px;
-  }
-
-  .alfajr-trust-badges span {
-    background: rgba(16,185,129,.10);
-    color: #067647;
-    border: 1px solid rgba(16,185,129,.18);
-    border-radius: 13px;
-    padding: 9px 8px;
-    font-size: 12px;
-    font-weight: 850;
-    text-align: center;
-  }
-
-  .alfajr-cod-form {
-    display: grid;
-    gap: 12px;
-  }
-
-  .alfajr-field {
-    display: grid;
-    gap: 6px;
-  }
-
-  .alfajr-field label {
-    font-size: 13px;
-    font-weight: 850;
-  }
-
-  .alfajr-cod-form input,
-  .alfajr-cod-form textarea {
-    width: 100%;
-    padding: 14px;
-    border-radius: {{ alfajr_border_radius }}px;
-    border: 1px solid {{ alfajr_form_border }};
-    font-size: 15px;
-    background: rgba(255,255,255,.92);
-    color: #111827;
-    outline: none;
-    transition: .18s ease;
-  }
-
-  .alfajr-cod-form input:focus,
-  .alfajr-cod-form textarea:focus {
-    border-color: {{ alfajr_form_accent }};
-    box-shadow: 0 0 0 4px rgba(13,71,199,.12);
-  }
-
-  .alfajr-cod-form textarea {
-    min-height: 88px;
-    resize: vertical;
-  }
-
-  .alfajr-error {
-    color: #DC2626;
-    font-size: 12px;
-    font-weight: 750;
-    min-height: 14px;
-  }
-
-  .alfajr-qty-control {
-    display: grid;
-    grid-template-columns: 44px 1fr 44px;
-    gap: 8px;
-  }
-
-  .alfajr-qty-control button {
-    border: none;
-    border-radius: {{ alfajr_border_radius }}px;
-    background: {{ alfajr_form_accent }};
-    color: #fff;
-    font-size: 22px;
-    font-weight: 950;
-    cursor: pointer;
-  }
-
-  .alfajr-qty-control input {
-    text-align: center;
-    font-weight: 950;
-  }
-
-  .alfajr-order-summary {
-    background: rgba(248,250,252,.9);
-    border-radius: {{ alfajr_border_radius }}px;
-    padding: 15px;
-    border: 1px solid {{ alfajr_form_border }};
-  }
-
-  .alfajr-line {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 9px;
-    font-size: 14px;
-  }
-
-  .alfajr-total {
-    font-size: 18px;
-    font-weight: 950;
-    padding-top: 10px;
-    border-top: 1px solid {{ alfajr_form_border }};
-    margin-bottom: 0;
-  }
-
-  .alfajr-submit-btn {
-    background: {{ alfajr_button_color }};
-    color: {{ alfajr_button_text_color }};
-    border: none;
-    border-radius: {{ alfajr_border_radius }}px;
-    padding: 16px;
-    font-size: 16px;
-    font-weight: 950;
-    cursor: pointer;
-    box-shadow: 0 14px 30px rgba(13,71,199,.22);
-    transition: .2s ease;
-  }
-
-  .alfajr-submit-btn:hover {
-    transform: translateY(-1px);
-  }
-
-  .alfajr-submit-btn:disabled {
-    opacity: .68;
-    cursor: not-allowed;
-    transform: none;
-  }
-
-  .alfajr-secure-note {
-    margin: 0;
-    font-size: 12px;
-    text-align: center;
-    opacity: .72;
-  }
-
-  .alfajr-theme-glass .alfajr-product-modal-content {
-  backdrop-filter: blur(34px) saturate(160%);
-  -webkit-backdrop-filter: blur(34px) saturate(160%);
-  background: rgba(255,255,255,.72);
-  border: 1px solid rgba(255,255,255,.42);
-  box-shadow: 0 30px 100px rgba(15,23,42,.22);
-}
-
-@media(max-width: 768px) {
-  .alfajr-cod-box {
-    position: sticky;
-    bottom: 10px;
-    z-index: 99;
-    background: rgba(255,255,255,.72);
-    backdrop-filter: blur(18px);
-    -webkit-backdrop-filter: blur(18px);
-    padding: 10px;
-    border-radius: 18px;
-    box-shadow: 0 18px 50px rgba(0,0,0,.12);
-  }
-}
-
-
-  .alfajr-step {
-    display: none;
-  }
-
-  .alfajr-step.active {
-    display: grid;
-    gap: 12px;
-    animation: alfajrFadeStep .22s ease;
-  }
-
-  @keyframes alfajrFadeStep {
-    from {
-      opacity: 0;
-      transform: translateY(8px);
+  <script type="application/json" data-variant-prices>
+    {
+      {% for variant in product.variants %}
+        "{{ variant.id }}": {{ variant.price }}{% unless forloop.last %},{% endunless %}
+      {% endfor %}
     }
-    to {
-      opacity: 1;
-      transform: none;
-    }
-  }
+  </script>
 
-  .alfajr-step-pill {
-    display: inline-flex;
-    width: fit-content;
-    background: rgba(13,71,199,.08);
-    color: {{ alfajr_form_accent }};
-    border: 1px solid rgba(13,71,199,.13);
-    border-radius: 999px;
-    padding: 6px 10px;
-    font-size: 12px;
-    font-weight: 950;
-  }
-
-  .alfajr-step-title {
-    font-size: 16px;
-    font-weight: 950;
-    color: {{ alfajr_form_text }};
-    margin-bottom: 2px;
-  }
-
-  .alfajr-step-actions {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-  }
-
-  .alfajr-back-btn {
-    background: rgba(148,163,184,.16);
-    color: {{ alfajr_form_text }};
-    border: 1px solid {{ alfajr_form_border }};
-    border-radius: {{ alfajr_border_radius }}px;
-    padding: 16px;
-    font-size: 16px;
-    font-weight: 950;
-    cursor: pointer;
-  }
-
-
-  {{ alfajr_custom_css }}
-
-  @media(max-width: 600px) {
-    .alfajr-product-modal {
-      padding: 10px;
+  <style>
+    [data-alfajr-cod-root="{{ block.id }}"] {
+      margin-top: 16px;
+      --alfajr-blue: {{ alfajr_form_accent }};
+      --alfajr-text: {{ alfajr_form_text }};
+      --alfajr-border: {{ alfajr_form_border }};
+      --alfajr-radius: {{ alfajr_border_radius }}px;
     }
 
-    .alfajr-product-modal-content {
-      margin: 10px auto;
+    [data-alfajr-cod-root="{{ block.id }}"] * { box-sizing: border-box; }
+
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__open {
+      width: {{ alfajr_button_width }};
+      min-height: 54px;
+      border: 0;
+      border-radius: var(--alfajr-radius);
+      padding: 15px 18px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 9px;
+      background: {{ alfajr_button_color }};
+      color: {{ alfajr_button_text_color }};
+      font: inherit;
+      font-size: 16px;
+      font-weight: 850;
+      cursor: pointer;
+      box-shadow: 0 10px 26px rgba(13, 71, 199, .22);
+      transition: transform .16s ease, box-shadow .16s ease;
+    }
+
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__open:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 14px 32px rgba(13, 71, 199, .27);
+    }
+
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 2147483000;
+      display: none;
+      align-items: center;
+      justify-content: center;
       padding: 18px;
-      border-radius: 22px;
-      max-height: 94vh;
+      overflow-y: auto;
+      background: rgba(15, 23, 42, .62);
+      overscroll-behavior: contain;
     }
 
-    .alfajr-trust-badges {
-      grid-template-columns: 1fr;
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__overlay.is-open { display: flex; }
+
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__dialog {
+      width: min(640px, 100%);
+      max-height: min(92vh, 860px);
+      overflow-y: auto;
+      position: relative;
+      padding: 22px;
+      border: 1px solid var(--alfajr-border);
+      border-radius: calc(var(--alfajr-radius) + 10px);
+      background: {{ alfajr_form_bg }};
+      color: var(--alfajr-text);
+      box-shadow: 0 28px 90px rgba(15, 23, 42, .28);
+      -webkit-overflow-scrolling: touch;
     }
 
-    .alfajr-main-cod-btn {
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__close {
+      position: absolute;
+      top: 13px;
+      right: 14px;
+      width: 38px;
+      height: 38px;
+      border: 0;
+      border-radius: 999px;
+      background: #eef2f7;
+      color: #0f172a;
+      font-size: 25px;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__header { padding-right: 42px; }
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__eyebrow {
+      display: inline-block;
+      margin-bottom: 5px;
+      color: var(--alfajr-blue);
+      font-size: 12px;
+      font-weight: 850;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+
+    [data-alfajr-cod-root="{{ block.id }}"] h2 {
+      margin: 0;
+      color: var(--alfajr-text);
+      font-size: clamp(21px, 4vw, 27px);
+      line-height: 1.15;
+      font-weight: 900;
+    }
+
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__header p {
+      margin: 7px 0 16px;
+      color: #64748b;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__product {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 11px;
+      margin-bottom: 14px;
+      border: 1px solid rgba(13, 71, 199, .12);
+      border-radius: calc(var(--alfajr-radius) + 3px);
+      background: rgba(13, 71, 199, .055);
+    }
+
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__product img {
+      width: 72px;
+      height: 72px;
+      flex: 0 0 72px;
+      object-fit: cover;
+      border-radius: 12px;
+      background: #fff;
+    }
+
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__product strong {
+      display: block;
+      font-size: 14px;
+      line-height: 1.3;
+      font-weight: 850;
+    }
+
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__product span {
+      display: block;
+      margin-top: 4px;
+      color: #64748b;
+      font-size: 12px;
+    }
+
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__form { display: grid; gap: 12px; }
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 11px;
+    }
+
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__field { display: grid; gap: 5px; }
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__field--wide { grid-column: 1 / -1; }
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__field label {
+      color: var(--alfajr-text);
+      font-size: 13px;
+      font-weight: 800;
+    }
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__field label span { color: #64748b; font-weight: 600; }
+
+    [data-alfajr-cod-root="{{ block.id }}"] input,
+    [data-alfajr-cod-root="{{ block.id }}"] textarea {
       width: 100%;
-    }
-  }
-</style>
-
-<script>
-document.addEventListener("DOMContentLoaded", () => {
-  const openBtn = document.getElementById("alfajr-open-product-cod");
-  const modal = document.getElementById("alfajr-product-modal");
-  const closeBtn = document.getElementById("alfajr-product-close");
-  const form = document.getElementById("alfajr-cod-form");
-  const submitBtn = document.getElementById("alfajr-submit-btn");
-
-  if (!openBtn || !modal || !form || !submitBtn) return;
-
-  const cityInput = form.querySelector('[name="city"]');
-  const qtyInput = form.querySelector('[name="quantity"]');
-  const phoneInput = form.querySelector('[name="phone"]');
-
-  const subtotalEl = document.getElementById("alfajr-subtotal");
-  const shippingEl = document.getElementById("alfajr-shipping");
-  const totalEl = document.getElementById("alfajr-total");
-
-  const minusBtn = document.getElementById("alfajr-qty-minus");
-  const plusBtn = document.getElementById("alfajr-qty-plus");
-
-  openBtn.addEventListener("click", () => {
-    modal.style.display = "block";
-    document.body.style.overflow = "hidden";
-    updateOrderSummary();
-    goToStep1();
-  });
-
-  function closeModal() {
-    modal.style.display = "none";
-    document.body.style.overflow = "";
-  }
-
-  closeBtn.addEventListener("click", closeModal);
-
-  modal.addEventListener("click", (e) => {
-    if (e.target === modal) closeModal();
-  });
-
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeModal();
-  });
-
-  plusBtn?.addEventListener("click", () => {
-    qtyInput.value = Math.max(1, Number(qtyInput.value || 1) + 1);
-    updateOrderSummary();
-  });
-
-  minusBtn?.addEventListener("click", () => {
-    qtyInput.value = Math.max(1, Number(qtyInput.value || 1) - 1);
-    updateOrderSummary();
-  });
-
-  function setError(name, message) {
-    const el = form.querySelector(`[data-error-for="${name}"]`);
-    if (el) el.textContent = message || "";
-  }
-
-  function clearErrors() {
-    ["full_name", "phone", "city", "address", "email"].forEach((name) => setError(name, ""));
-  }
-
-  function normalizeMoroccanPhone(phone) {
-    let value = String(phone || "").replace(/\s|-/g, "").trim();
-
-    if (value.startsWith("+212")) {
-      value = "0" + value.slice(4);
+      min-height: 48px;
+      margin: 0;
+      border: 1px solid var(--alfajr-border);
+      border-radius: var(--alfajr-radius);
+      padding: 12px 13px;
+      background: #fff;
+      color: #111827;
+      font: inherit;
+      font-size: 15px;
+      outline: none;
+      transition: border-color .15s ease, box-shadow .15s ease;
     }
 
-    if (value.startsWith("212")) {
-      value = "0" + value.slice(3);
+    [data-alfajr-cod-root="{{ block.id }}"] textarea { min-height: 78px; resize: vertical; }
+    [data-alfajr-cod-root="{{ block.id }}"] input:focus,
+    [data-alfajr-cod-root="{{ block.id }}"] textarea:focus {
+      border-color: var(--alfajr-blue);
+      box-shadow: 0 0 0 3px rgba(13, 71, 199, .11);
+    }
+    [data-alfajr-cod-root="{{ block.id }}"] [aria-invalid="true"] { border-color: #dc2626; }
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__field small {
+      min-height: 14px;
+      color: #dc2626;
+      font-size: 11px;
+      font-weight: 700;
     }
 
-    return value;
-  }
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__field--quantity { max-width: 190px; }
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__quantity {
+      display: grid;
+      grid-template-columns: 44px 1fr 44px;
+      gap: 7px;
+    }
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__quantity button {
+      border: 0;
+      border-radius: var(--alfajr-radius);
+      background: var(--alfajr-blue);
+      color: #fff;
+      font-size: 21px;
+      cursor: pointer;
+    }
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__quantity input { text-align: center; font-weight: 850; }
 
-  function isValidMoroccanPhone(phone) {
-    const normalized = normalizeMoroccanPhone(phone);
-    return /^(06|07)[0-9]{8}$/.test(normalized);
-  }
-
-  function getCurrentVariantId() {
-
-  // Dawn + Ella + Prestige
-  let variantInput =
-    document.querySelector('form[action*="/cart/add"] [name="id"]');
-
-  if (variantInput?.value) {
-    return variantInput.value;
-  }
-
-  // Radio variants
-  variantInput =
-    document.querySelector('input[name="id"]:checked');
-
-  if (variantInput?.value) {
-    return variantInput.value;
-  }
-
-  // Select variants
-  variantInput =
-    document.querySelector('select[name="id"]');
-
-  if (variantInput?.value) {
-    return variantInput.value;
-  }
-
-  // Impact / Prestige
-  variantInput =
-    document.querySelector('input[name="variant-id"]');
-
-  if (variantInput?.value) {
-    return variantInput.value;
-  }
-
-  // Variant موجود فالـ URL
-  const variantFromUrl =
-    new URLSearchParams(window.location.search).get("variant");
-
-  if (variantFromUrl) {
-    return variantFromUrl;
-  }
-
-  // fallback
-  return form.variant_id.value;
-}
-
-  function normalizeCity(city) {
-    return String(city || "")
-      .toLowerCase()
-      .trim()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "");
-  }
-
-  function getShippingFee(city) {
-    const normalizedCity = normalizeCity(city);
-
-    if (
-      normalizedCity.includes("fes") ||
-      normalizedCity.includes("fez") ||
-      normalizedCity.includes("فاس")
-    ) {
-      return 20;
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__summary {
+      padding: 14px;
+      border: 1px solid var(--alfajr-border);
+      border-radius: var(--alfajr-radius);
+      background: #f8fafc;
+    }
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__summary > div {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 4px 0;
+      color: #475569;
+      font-size: 14px;
+    }
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__summary strong { color: #0f172a; }
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__total {
+      margin-top: 7px;
+      padding-top: 11px !important;
+      border-top: 1px solid var(--alfajr-border);
+      font-size: 18px !important;
+      font-weight: 900;
     }
 
-    return 35;
-  }
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__submit {
+      min-height: 54px;
+      border: 0;
+      border-radius: var(--alfajr-radius);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 9px;
+      padding: 14px 18px;
+      background: {{ alfajr_button_color }};
+      color: {{ alfajr_button_text_color }};
+      font: inherit;
+      font-size: 16px;
+      font-weight: 900;
+      cursor: pointer;
+      box-shadow: 0 10px 25px rgba(13, 71, 199, .2);
+    }
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__submit:disabled { opacity: .68; cursor: wait; }
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid currentColor;
+      border-right-color: transparent;
+      border-radius: 50%;
+      animation: alfajrCodSpin .7s linear infinite;
+    }
+    @keyframes alfajrCodSpin { to { transform: rotate(360deg); } }
 
-  function parseMoney(text) {
-    const cleaned = String(text || "")
-      .replace(/\s/g, "")
-      .replace(",", ".")
-      .replace(/[^\d.]/g, "");
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__status {
+      min-height: 18px;
+      margin: 0;
+      color: #b91c1c;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__secure {
+      margin: -3px 0 0;
+      color: #64748b;
+      text-align: center;
+      font-size: 11px;
+      line-height: 1.45;
+    }
 
-    const number = parseFloat(cleaned);
-    return isNaN(number) ? 0 : number;
-  }
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__honeypot {
+      position: absolute !important;
+      left: -10000px !important;
+      width: 1px !important;
+      height: 1px !important;
+      overflow: hidden !important;
+    }
 
-  function getProductPrice() {
-    const selectors = [
-      "[data-product-price]",
-      ".price-item--sale",
-      ".price-item--regular",
-      ".price__regular .price-item",
-      ".price"
-    ];
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__success {
+      min-height: 390px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      text-align: center;
+    }
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__success[hidden] { display: none; }
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__success-icon {
+      width: 68px;
+      height: 68px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: #dcfce7;
+      color: #15803d;
+      font-size: 36px;
+      font-weight: 900;
+    }
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__success p { max-width: 410px; margin: 0; color: #64748b; }
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__success > button {
+      margin-top: 8px;
+      border: 1px solid var(--alfajr-border);
+      border-radius: var(--alfajr-radius);
+      padding: 12px 18px;
+      background: #fff;
+      color: #0f172a;
+      font: inherit;
+      font-weight: 800;
+      cursor: pointer;
+    }
 
-    for (const selector of selectors) {
-      const el = document.querySelector(selector);
-      if (el && el.textContent.trim()) {
-        const price = parseMoney(el.textContent);
-        if (price > 0) return price;
+    {{ alfajr_custom_css }}
+
+    @media (max-width: 640px) {
+      [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__overlay {
+        align-items: flex-end;
+        padding: 0;
       }
+      [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__dialog {
+        width: 100%;
+        max-height: 94dvh;
+        border-radius: 22px 22px 0 0;
+        padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
+      }
+      [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__grid { grid-template-columns: 1fr; }
+      [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__field--wide { grid-column: auto; }
     }
 
-    return 0;
-  }
-
-  function updateOrderSummary() {
-    if (!subtotalEl || !shippingEl || !totalEl) return;
-
-    const quantity = Math.max(1, Number(qtyInput?.value || 1));
-    const productPrice = getProductPrice();
-    const subtotal = productPrice * quantity;
-    const shipping = getShippingFee(cityInput?.value || "");
-    const total = subtotal + shipping;
-
-    subtotalEl.textContent = subtotal.toFixed(2) + " DH";
-    shippingEl.textContent = shipping.toFixed(2) + " DH";
-    totalEl.textContent = total.toFixed(2) + " DH";
-  }
-
-  function validateForm() {
-    clearErrors();
-
-    let valid = true;
-
-    const fullName = form.full_name?.value || "";
-    const phone = form.phone?.value || "";
-    const city = form.city?.value || "";
-    const address = form.address?.value || "";
-    const email = form.email?.value || "";
-
-    if (form.full_name && fullName.trim().length < 2) {
-      setError("full_name", "Veuillez entrer votre nom complet.");
-      valid = false;
+    @media (prefers-reduced-motion: reduce) {
+      [data-alfajr-cod-root="{{ block.id }}"] * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
     }
+  </style>
 
-    if (form.phone && !isValidMoroccanPhone(phone)) {
-      setError("phone", "Veuillez entrer un numéro marocain valide.");
-      valid = false;
-    }
+  <script>
+    (() => {
+      const root = document.currentScript.closest('[data-alfajr-cod-root]');
+      if (!root || root.dataset.codInitialized === 'true') return;
+      root.dataset.codInitialized = 'true';
 
-    if (form.city && city.trim().length < 2) {
-      setError("city", "Veuillez entrer votre ville.");
-      valid = false;
-    }
+      const overlay = root.querySelector('[data-cod-overlay]');
+      const openButton = root.querySelector('[data-cod-open]');
+      const closeButtons = root.querySelectorAll('[data-cod-close], [data-cod-success-close]');
+      const formPanel = root.querySelector('[data-cod-form-panel]');
+      const successPanel = root.querySelector('[data-cod-success]');
+      const form = root.querySelector('[data-cod-form]');
+      const submitButton = root.querySelector('[data-cod-submit]');
+      const submitLabel = root.querySelector('[data-submit-label]');
+      const submitSpinner = root.querySelector('[data-submit-spinner]');
+      const status = root.querySelector('[data-cod-status]');
+      const quantityInput = form?.elements.quantity;
+      const cityInput = form?.elements.city;
+      const variantInput = form?.elements.variant_id;
+      const priceMapNode = root.querySelector('[data-variant-prices]');
 
-    if (form.address && address.trim().length < 5) {
-      setError("address", "Veuillez entrer une adresse complète.");
-      valid = false;
-    }
+      if (!overlay || !openButton || !form || !submitButton || !priceMapNode) return;
 
-    if (form.email && email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setError("email", "Veuillez entrer un email valide.");
-      valid = false;
-    }
+      let priceMap = {};
+      try { priceMap = JSON.parse(priceMapNode.textContent || '{}'); } catch (_) {}
 
-    return valid;
-  }
+      const money = (value) => `${Number(value || 0).toFixed(2)} DH`;
+      const createRequestId = () =>
+        window.crypto?.randomUUID?.() ||
+        `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
 
-  cityInput?.addEventListener("input", updateOrderSummary);
-  qtyInput?.addEventListener("input", updateOrderSummary);
-  qtyInput?.addEventListener("change", updateOrderSummary);
-  phoneInput?.addEventListener("input", () => setError("phone", ""));
-  document.addEventListener("change", () => {
-  form.variant_id.value = getCurrentVariantId();
-  updateOrderSummary();
-  });
+      function normalizeCity(city) {
+        return String(city || '')
+          .toLocaleLowerCase('fr-MA')
+          .trim()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, '')
+          .replace(/[أإآٱ]/g, 'ا')
+          .replace(/ـ/g, '')
+          .replace(/[،؛؟]/g, ' ')
+          .replace(/([a-z\u0600-\u06ff])\1+/gu, '$1')
+          .replace(/[^a-z0-9\u0600-\u06ff]+/gu, ' ')
+          .trim();
+      }
 
-  const step1 = document.getElementById("alfajr-step-1");
-  const step2 = document.getElementById("alfajr-step-2");
-  const nextStepBtn = document.getElementById("alfajr-next-step");
-  const backStepBtn = document.getElementById("alfajr-back-step");
+      function isFes(city) {
+        const aliases = new Set(['fes', 'fez', 'fas', 'فاس', 'فس']);
+        return normalizeCity(city).split(/\s+/).some((token) => aliases.has(token));
+      }
 
-  function goToStep1() {
-    step2?.classList.remove("active");
-    step1?.classList.add("active");
-  }
+      function shippingFee() { return isFes(cityInput?.value) ? 20 : 35; }
 
-  function goToStep2() {
-    step1?.classList.remove("active");
-    step2?.classList.add("active");
-    setTimeout(() => form.full_name?.focus(), 80);
-  }
+      function currentVariantId() {
+        const productSection = root.closest('section') || document;
+        const selectors = [
+          'form[action*="/cart/add"] [name="id"]',
+          'input[name="id"]:checked',
+          'select[name="id"]',
+          'input[name="variant-id"]'
+        ];
 
-  nextStepBtn?.addEventListener("click", () => {
-    form.variant_id.value = getCurrentVariantId();
-    updateOrderSummary();
-    goToStep2();
-  });
+        for (const selector of selectors) {
+          const element = productSection.querySelector(selector) || document.querySelector(selector);
+          if (element?.value) return String(element.value);
+        }
 
-  backStepBtn?.addEventListener("click", () => {
-    goToStep1();
-  });
+        return new URLSearchParams(location.search).get('variant') || root.dataset.defaultVariant;
+      }
 
+      function updateSummary() {
+        const variantId = currentVariantId();
+        if (variantInput && variantId) variantInput.value = variantId;
 
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
+        const unitPrice = Number(priceMap[variantId] || 0) / 100;
+        const quantity = Math.min(100, Math.max(1, Number(quantityInput?.value || 1)));
+        const shipping = shippingFee();
+        const subtotal = unitPrice * quantity;
 
-    if (!validateForm()) return;
+        root.querySelector('[data-cod-subtotal]').textContent = money(subtotal);
+        root.querySelector('[data-cod-shipping]').textContent = money(shipping);
+        root.querySelector('[data-cod-total]').textContent = money(subtotal + shipping);
+      }
 
-    const shippingFee = getShippingFee(form.city?.value || "");
-    const normalizedPhone = normalizeMoroccanPhone(form.phone?.value || "");
+      function normalizePhone(value) {
+        let phone = String(value || '').replace(/[\s\-()]/g, '').trim();
+        if (phone.startsWith('+212')) phone = `0${phone.slice(4)}`;
+        if (phone.startsWith('212')) phone = `0${phone.slice(3)}`;
+        return phone;
+      }
 
-    const data = {
-      shop: form.shop.value,
-      productId: form.product_id.value,
-      variantId: getCurrentVariantId(),
-      productTitle: form.product_title.value,
-      productImage: form.product_image.value,
-      fullName: form.full_name?.value || "",
-      phone: normalizedPhone,
-      city: form.city?.value || "",
-      address: form.address?.value || "",
-      quantity: Number(form.quantity?.value || 1),
-      shippingFee,
-      email: form.email?.value || "",
-      notes: form.notes?.value || ""
-    };
+      function setError(name, message) {
+        const error = form.querySelector(`[data-error-for="${name}"]`);
+        const input = form.elements[name];
+        if (error) error.textContent = message || '';
+        if (input) input.setAttribute('aria-invalid', message ? 'true' : 'false');
+      }
 
-    const idempotencyKey = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      function clearErrors() {
+        ['full_name', 'phone', 'city', 'address', 'email'].forEach((name) => setError(name, ''));
+        status.textContent = '';
+      }
 
-    try {
-      submitBtn.disabled = true;
-      submitBtn.textContent = "Envoi de la commande...";
+      function validate() {
+        clearErrors();
+        let valid = true;
+        const values = {
+          full_name: form.elements.full_name?.value?.trim() || '',
+          phone: normalizePhone(form.elements.phone?.value || ''),
+          city: form.elements.city?.value?.trim() || '',
+          address: form.elements.address?.value?.trim() || '',
+          email: form.elements.email?.value?.trim() || ''
+        };
 
-      const response = await fetch("/apps/alfajr-cod/api/cod", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "idempotency-key": idempotencyKey
-        },
-        body: JSON.stringify(data)
+        if (form.elements.full_name && values.full_name.length < 2) {
+          setError('full_name', 'Veuillez entrer votre nom complet.'); valid = false;
+        }
+        if (form.elements.phone && !/^(06|07)\d{8}$/.test(values.phone)) {
+          setError('phone', 'Veuillez entrer un numéro marocain valide.'); valid = false;
+        }
+        if (form.elements.city && values.city.length < 2) {
+          setError('city', 'Veuillez entrer votre ville.'); valid = false;
+        }
+        if (form.elements.address && values.address.length < 5) {
+          setError('address', 'Veuillez entrer une adresse complète.'); valid = false;
+        }
+        if (values.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) {
+          setError('email', 'Veuillez entrer un email valide.'); valid = false;
+        }
+
+        if (!valid) form.querySelector('[aria-invalid="true"]')?.focus();
+        return valid;
+      }
+
+      function emitEvent(name, detail = {}) {
+        window.dataLayer?.push?.({ event: name, ...detail });
+        if (typeof window.fbq === 'function') {
+          window.fbq('trackCustom', name, detail);
+        }
+        document.dispatchEvent(new CustomEvent(name, { detail }));
+      }
+
+      function trackingData() {
+        const params = new URLSearchParams(location.search);
+        return {
+          utmSource: params.get('utm_source') || '',
+          utmMedium: params.get('utm_medium') || '',
+          utmCampaign: params.get('utm_campaign') || '',
+          utmContent: params.get('utm_content') || '',
+          utmTerm: params.get('utm_term') || '',
+          fbclid: params.get('fbclid') || '',
+          landingPage: location.href.slice(0, 500),
+          referrer: document.referrer.slice(0, 500)
+        };
+      }
+
+      function open() {
+        formPanel.hidden = false;
+        successPanel.hidden = true;
+        form.elements.form_started_at.value = String(Date.now());
+        form.elements.idempotency_key.value = createRequestId();
+        overlay.classList.add('is-open');
+        overlay.setAttribute('aria-hidden', 'false');
+        document.documentElement.style.overflow = 'hidden';
+        updateSummary();
+        emitEvent('cod_form_view', { variantId: currentVariantId() });
+        setTimeout(() => form.elements.full_name?.focus(), 50);
+      }
+
+      function close() {
+        overlay.classList.remove('is-open');
+        overlay.setAttribute('aria-hidden', 'true');
+        document.documentElement.style.overflow = '';
+        openButton.focus();
+      }
+
+      openButton.addEventListener('click', open);
+      closeButtons.forEach((button) => button.addEventListener('click', close));
+      overlay.addEventListener('click', (event) => { if (event.target === overlay) close(); });
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && overlay.classList.contains('is-open')) close();
       });
 
-      const result = await response.json();
+      root.querySelector('[data-qty-plus]')?.addEventListener('click', () => {
+        quantityInput.value = String(Math.min(100, Number(quantityInput.value || 1) + 1));
+        updateSummary();
+      });
+      root.querySelector('[data-qty-minus]')?.addEventListener('click', () => {
+        quantityInput.value = String(Math.max(1, Number(quantityInput.value || 1) - 1));
+        updateSummary();
+      });
+      cityInput?.addEventListener('input', updateSummary);
+      quantityInput?.addEventListener('input', updateSummary);
 
-      if (result.success) {
-        sessionStorage.setItem("alfajr_cod_order", JSON.stringify({
-          productTitle: data.productTitle,
-          productImage: data.productImage,
-          fullName: data.fullName,
-          phone: data.phone,
-          city: data.city,
-          address: data.address,
-          quantity: data.quantity,
-          variantId: data.variantId,
-          shippingFee: data.shippingFee,
-          email: data.email,
-          notes: data.notes
-        }));
+      document.addEventListener('change', (event) => {
+        if (event.target?.matches?.('[name="id"], [name="variant-id"], [data-option-value-id]')) updateSummary();
+      });
 
-        window.location.href = form.success_page?.value || "/pages/merci-commande";
-      } else {
-        submitBtn.disabled = false;
-        submitBtn.textContent = "Confirmer ma commande";
-        alert(result.message || "Erreur: commande non envoyée");
-      }
-    } catch (err) {
-      console.error("AL FAJR COD ERROR:", err);
-      submitBtn.disabled = false;
-      submitBtn.textContent = "Confirmer ma commande";
-      alert("Erreur de connexion. Veuillez réessayer.");
-    }
-  });
-});
-</script>
+      form.addEventListener('input', () => {
+        if (!form.dataset.started) {
+          form.dataset.started = 'true';
+          emitEvent('cod_form_start', { variantId: currentVariantId() });
+        }
+      }, { once: true });
+
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (!validate()) return;
+
+        const requestId = form.elements.idempotency_key.value || createRequestId();
+        form.elements.idempotency_key.value = requestId;
+
+        const payload = {
+          variantId: currentVariantId(),
+          quantity: Math.min(100, Math.max(1, Number(quantityInput?.value || 1))),
+          fullName: form.elements.full_name?.value?.trim() || '',
+          phone: normalizePhone(form.elements.phone?.value || ''),
+          city: form.elements.city?.value?.trim() || '',
+          address: form.elements.address?.value?.trim() || '',
+          email: form.elements.email?.value?.trim() || '',
+          notes: form.elements.notes?.value?.trim() || '',
+          website: form.elements.website?.value || '',
+          formStartedAt: Number(form.elements.form_started_at.value || Date.now()),
+          idempotencyKey: requestId,
+          ...trackingData()
+        };
+
+        submitButton.disabled = true;
+        submitLabel.textContent = 'Enregistrement...';
+        submitSpinner.hidden = false;
+        status.textContent = '';
+        emitEvent('cod_submit', { variantId: payload.variantId, city: payload.city });
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15000);
+
+        let rotateRequestId = false;
+
+        try {
+          const response = await fetch('/apps/alfajr-cod/api/cod', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            signal: controller.signal,
+            credentials: 'same-origin'
+          });
+
+          const result = await response.json().catch(() => ({}));
+
+          if (!response.ok || !result.success) {
+            if (result.errors) {
+              Object.entries(result.errors).forEach(([name, message]) => setError(name, message));
+            }
+            rotateRequestId = response.status !== 409 && !result.processing;
+            throw new Error(result.message || 'La commande n’a pas pu être envoyée.');
+          }
+
+          formPanel.hidden = true;
+          successPanel.hidden = false;
+          root.querySelector('[data-cod-order-name]').textContent = result.order?.name || '';
+          emitEvent('cod_order_success', {
+            orderName: result.order?.name || '',
+            value: result.order?.total || 0,
+            currency: result.order?.currency || 'MAD',
+            shippingFee: result.shippingFee
+          });
+        } catch (error) {
+          const message = error?.name === 'AbortError'
+            ? 'Le serveur prend trop de temps. Vérifiez votre connexion puis réessayez.'
+            : error?.message || 'Erreur de connexion. Veuillez réessayer.';
+          status.textContent = message;
+          if (rotateRequestId) form.elements.idempotency_key.value = createRequestId();
+          emitEvent('cod_order_error', { message });
+        } finally {
+          clearTimeout(timeout);
+          submitButton.disabled = false;
+          submitLabel.textContent = 'Confirmer ma commande';
+          submitSpinner.hidden = true;
+        }
+      });
+
+      updateSummary();
+    })();
+  </script>
+</div>
 
 {% schema %}
 {

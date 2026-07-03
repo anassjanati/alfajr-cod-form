@@ -1,38 +1,69 @@
-const requestCounts = new Map();
+/**
+ * Lightweight in-process fixed-window limiter.
+ *
+ * This is intentionally used as a fast first line of defence. For a single
+ * VPS instance it is sufficient; Cloudflare/Nginx should enforce a second
+ * network-level limit in production.
+ */
+const buckets = new Map();
 
 export function checkRateLimit(key, limit = 10, windowSeconds = 60) {
   const now = Date.now();
+  const existing = buckets.get(key);
 
-  if (!requestCounts.has(key)) {
-    requestCounts.set(key, { count: 1, resetTime: now + windowSeconds * 1000 });
-    return { allowed: true, remaining: limit - 1, resetTime: requestCounts.get(key).resetTime };
+  if (!existing || now >= existing.resetTime) {
+    const bucket = {
+      count: 1,
+      resetTime: now + windowSeconds * 1000,
+    };
+    buckets.set(key, bucket);
+
+    return {
+      allowed: true,
+      remaining: Math.max(0, limit - 1),
+      resetTime: bucket.resetTime,
+    };
   }
 
-  const current = requestCounts.get(key);
+  existing.count += 1;
 
-  if (now > current.resetTime) {
-    requestCounts.set(key, { count: 1, resetTime: now + windowSeconds * 1000 });
-    return { allowed: true, remaining: limit - 1, resetTime: requestCounts.get(key).resetTime };
-  }
+  return {
+    allowed: existing.count <= limit,
+    remaining: Math.max(0, limit - existing.count),
+    resetTime: existing.resetTime,
+  };
+}
 
-  current.count++;
-  const allowed = current.count <= limit;
-  const remaining = Math.max(0, limit - current.count);
+export function checkCodRateLimits({ shop, clientIp }) {
+  const perClient = checkRateLimit(`cod:client:${shop}:${clientIp}`, 60, 60);
+  if (!perClient.allowed) return perClient;
 
-  return { allowed, remaining, resetTime: current.resetTime };
+  // Emergency circuit breaker. This does not restrict normal paid traffic.
+  return checkRateLimit(`cod:shop:${shop}`, 1200, 60);
+}
+
+export function getClientIp(request) {
+  const forwarded = request.headers.get("x-forwarded-for");
+  const forwardedIp = forwarded?.split(",")[0]?.trim();
+
+  return (
+    request.headers.get("cf-connecting-ip") ||
+    request.headers.get("x-real-ip") ||
+    forwardedIp ||
+    "unknown"
+  );
 }
 
 export function resetRateLimit(key) {
-  requestCounts.delete(key);
+  buckets.delete(key);
 }
 
-export function cleanup() {
+function cleanup() {
   const now = Date.now();
-  for (const [key, value] of requestCounts.entries()) {
-    if (now > value.resetTime) {
-      requestCounts.delete(key);
-    }
+  for (const [key, bucket] of buckets.entries()) {
+    if (now >= bucket.resetTime) buckets.delete(key);
   }
 }
 
-setInterval(cleanup, 60 * 1000);
+const cleanupTimer = setInterval(cleanup, 60_000);
+cleanupTimer.unref?.();
