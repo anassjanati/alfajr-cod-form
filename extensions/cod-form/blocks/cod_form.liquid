@@ -332,56 +332,69 @@
 }
 
     [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__dialog {
-      width: min(640px, 100%);
-      max-height: min(92vh, 860px);
-      overflow-y: auto;
       position: relative;
-      padding: 22px;
+      display: flex;
+      flex-direction: column;
+      width: min(640px, calc(100vw - 24px));
+      max-height: calc(
+        100dvh -
+        max(24px, env(safe-area-inset-top)) -
+        max(24px, env(safe-area-inset-bottom))
+      );
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
       border: 1px solid var(--alfajr-border);
       border-radius: calc(var(--alfajr-radius) + 10px);
       background: {{ alfajr_form_bg }};
       color: var(--alfajr-text);
-      box-shadow: 0 28px 90px rgba(15, 23, 42, .28);
-      -webkit-overflow-scrolling: touch;
+      box-shadow: 0 28px 90px rgba(15, 23, 42, .32);
     }
 
-    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__modal {
-  position: relative;
-  width: min(680px, 100%);
-  max-width: 680px;
+    [data-alfajr-cod-root="{{ block.id }}"] [data-cod-form-panel],
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__success {
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-gutter: stable;
+    }
 
-  max-height: calc(
-    100dvh -
-    max(24px, env(safe-area-inset-top)) -
-    max(24px, env(safe-area-inset-bottom))
-  );
-
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-
-  margin: 0;
-  border-radius: 24px;
-  background: #ffffff;
-  box-shadow: 0 30px 90px rgba(15, 23, 42, 0.32);
-  box-sizing: border-box;
-}
+    [data-alfajr-cod-root="{{ block.id }}"] [data-cod-form-panel] {
+      padding: 22px;
+    }
 
     [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__close {
-  position: absolute;
-  top: 13px;
-  right: 14px;
-  width: 38px;
-  height: 38px;
-  border: 1px solid #dbe3ee;
-  border-radius: 999px;
-  background: #ffffff;
-  color: #0f172a;
-  font-size: 25px;
-  line-height: 1;
-  cursor: pointer;
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.10);
-}
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 42px;
+      height: 42px;
+      border: 1px solid #dbe3ee;
+      border-radius: 999px;
+      background: #ffffff;
+      color: #0f172a;
+      font-size: 27px;
+      line-height: 1;
+      cursor: pointer;
+      box-shadow: 0 6px 18px rgba(15, 23, 42, .18);
+      transition: transform .15s ease, box-shadow .15s ease;
+    }
+
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__close:hover {
+      transform: scale(1.04);
+      box-shadow: 0 8px 22px rgba(15, 23, 42, .22);
+    }
+
+    html.alfajr-cod-modal-open,
+    body.alfajr-cod-modal-open {
+      overflow: hidden !important;
+      overscroll-behavior: none;
+    }
     [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__header { padding-right: 42px; }
     [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__eyebrow {
       display: inline-block;
@@ -599,6 +612,7 @@
 
     [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__success {
       min-height: 390px;
+      padding: 24px;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -636,16 +650,47 @@
     @media (max-width: 640px) {
       [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__overlay {
         align-items: flex-end;
-        padding: 0;
+        padding:
+          max(8px, env(safe-area-inset-top))
+          0
+          0;
       }
+
       [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__dialog {
         width: 100%;
-        max-height: 94dvh;
+        max-height: calc(
+          100dvh -
+          max(8px, env(safe-area-inset-top))
+        );
         border-radius: 22px 22px 0 0;
-        padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
       }
-      [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__grid { grid-template-columns: 1fr; }
-      [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__field--wide { grid-column: auto; }
+
+      [data-alfajr-cod-root="{{ block.id }}"] [data-cod-form-panel] {
+        padding:
+          18px
+          16px
+          calc(18px + env(safe-area-inset-bottom));
+      }
+
+      [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__success {
+        padding:
+          22px
+          16px
+          calc(22px + env(safe-area-inset-bottom));
+      }
+
+      [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__close {
+        top: 10px;
+        right: 10px;
+      }
+
+      [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__grid {
+        grid-template-columns: 1fr;
+      }
+
+      [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__field--wide {
+        grid-column: auto;
+      }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -661,34 +706,72 @@
 
       const overlay = root.querySelector('[data-cod-overlay]');
       const openButton = root.querySelector('[data-cod-open]');
-      const closeButtons = root.querySelectorAll('[data-cod-close], [data-cod-success-close]');
-      const formPanel = root.querySelector('[data-cod-form-panel]');
-      const successPanel = root.querySelector('[data-cod-success]');
-      const form = root.querySelector('[data-cod-form]');
-      const submitButton = root.querySelector('[data-cod-submit]');
-      const submitLabel = root.querySelector('[data-submit-label]');
-      const submitSpinner = root.querySelector('[data-submit-spinner]');
-      const status = root.querySelector('[data-cod-status]');
+      const variantDataNode = root.querySelector('[data-variant-data]');
+
+      if (!overlay || !openButton || !variantDataNode) return;
+
+      /*
+       * Move the overlay to <body>.
+       * This removes it from theme sections that create their own stacking
+       * context, so the COD modal always appears above the sticky header.
+       */
+      const blockId = root.getAttribute('data-alfajr-cod-root');
+      document.querySelectorAll('[data-alfajr-cod-portal]').forEach((node) => {
+        if (node.getAttribute('data-alfajr-cod-portal') === blockId) {
+          node.remove();
+        }
+      });
+
+      const portal = document.createElement('div');
+      portal.setAttribute('data-alfajr-cod-portal', blockId);
+      portal.setAttribute('data-alfajr-cod-root', blockId);
+      document.body.appendChild(portal);
+      portal.appendChild(overlay);
+
+      const closeButtons = overlay.querySelectorAll(
+        '[data-cod-close], [data-cod-success-close]'
+      );
+      const formPanel = overlay.querySelector('[data-cod-form-panel]');
+      const successPanel = overlay.querySelector('[data-cod-success]');
+      const form = overlay.querySelector('[data-cod-form]');
+      const submitButton = overlay.querySelector('[data-cod-submit]');
+      const submitLabel = overlay.querySelector('[data-submit-label]');
+      const submitSpinner = overlay.querySelector('[data-submit-spinner]');
+      const status = overlay.querySelector('[data-cod-status]');
       const quantityInput = form?.elements.quantity;
       const cityInput = form?.elements.city;
       const variantInput = form?.elements.variant_id;
-      const variantDataNode = root.querySelector('[data-variant-data]');
-const productImage = root.querySelector('[data-cod-product-image]');
-const variantRow = root.querySelector('[data-cod-variant-row]');
-const variantTitle = root.querySelector('[data-cod-variant-title]');
-const unitPrice = root.querySelector('[data-cod-unit-price]');
+      const productImage = overlay.querySelector('[data-cod-product-image]');
+      const variantRow = overlay.querySelector('[data-cod-variant-row]');
+      const variantTitle = overlay.querySelector('[data-cod-variant-title]');
+      const unitPrice = overlay.querySelector('[data-cod-unit-price]');
+      const subtotalOutput = overlay.querySelector('[data-cod-subtotal]');
+      const shippingOutput = overlay.querySelector('[data-cod-shipping]');
+      const totalOutput = overlay.querySelector('[data-cod-total]');
+      const orderNameOutput = overlay.querySelector('[data-cod-order-name]');
+      const quantityPlus = overlay.querySelector('[data-qty-plus]');
+      const quantityMinus = overlay.querySelector('[data-qty-minus]');
 
-if (!overlay || !openButton || !form || !submitButton || !variantDataNode) {
-  return;
-}
+      if (
+        !form ||
+        !formPanel ||
+        !successPanel ||
+        !submitButton ||
+        !submitLabel ||
+        !submitSpinner ||
+        !status
+      ) {
+        portal.remove();
+        return;
+      }
 
-let variantData = {};
+      let variantData = {};
 
-try {
-  variantData = JSON.parse(variantDataNode.textContent || '{}');
-} catch (_) {
-  variantData = {};
-}
+      try {
+        variantData = JSON.parse(variantDataNode.textContent || '{}');
+      } catch (_) {
+        variantData = {};
+      }
 
       const money = (value) => `${Number(value || 0).toFixed(2)} DH`;
       const createRequestId = () =>
@@ -770,9 +853,9 @@ if (productImage && selectedVariant.image) {
   productImage.src = selectedVariant.image;
 }
 
-        root.querySelector('[data-cod-subtotal]').textContent = money(subtotal);
-        root.querySelector('[data-cod-shipping]').textContent = money(shipping);
-        root.querySelector('[data-cod-total]').textContent = money(subtotal + shipping);
+        if (subtotalOutput) subtotalOutput.textContent = money(subtotal);
+        if (shippingOutput) shippingOutput.textContent = money(shipping);
+        if (totalOutput) totalOutput.textContent = money(subtotal + shipping);
       }
 
       function normalizePhone(value) {
@@ -852,37 +935,52 @@ if (productImage && selectedVariant.image) {
         successPanel.hidden = true;
         form.elements.form_started_at.value = String(Date.now());
         form.elements.idempotency_key.value = createRequestId();
+
         overlay.classList.add('is-open');
         overlay.setAttribute('aria-hidden', 'false');
-        document.documentElement.style.overflow = 'hidden';
+        document.documentElement.classList.add('alfajr-cod-modal-open');
+        document.body.classList.add('alfajr-cod-modal-open');
+
+        formPanel.scrollTop = 0;
+        successPanel.scrollTop = 0;
         updateSummary();
         emitEvent('cod_form_view', { variantId: currentVariantId() });
-        setTimeout(() => form.elements.full_name?.focus(), 50);
+
+        window.setTimeout(() => {
+          form.elements.full_name?.focus({ preventScroll: true });
+        }, 80);
       }
 
       function close() {
         overlay.classList.remove('is-open');
         overlay.setAttribute('aria-hidden', 'true');
-        document.documentElement.style.overflow = '';
-        openButton.focus();
+        document.documentElement.classList.remove('alfajr-cod-modal-open');
+        document.body.classList.remove('alfajr-cod-modal-open');
+        openButton.focus({ preventScroll: true });
       }
 
       openButton.addEventListener('click', open);
 
-closeButtons.forEach((button) => {
-  button.addEventListener('click', close);
-});
+      closeButtons.forEach((button) => {
+        button.addEventListener('click', close);
+      });
 
-// لا يتم إغلاق الفورم عند الضغط خارج النافذة.
-// لا يتم إغلاق الفورم باستعمال زر Escape.
-// الإغلاق متاح فقط من زر X أو زر الإغلاق داخل Success Panel.
+      /*
+       * Intentionally no overlay-click or Escape-key listener.
+       * The customer can close the form only with the visible close button.
+       */
 
-      root.querySelector('[data-qty-plus]')?.addEventListener('click', () => {
-        quantityInput.value = String(Math.min(100, Number(quantityInput.value || 1) + 1));
+      quantityPlus?.addEventListener('click', () => {
+        quantityInput.value = String(
+          Math.min(100, Number(quantityInput.value || 1) + 1)
+        );
         updateSummary();
       });
-      root.querySelector('[data-qty-minus]')?.addEventListener('click', () => {
-        quantityInput.value = String(Math.max(1, Number(quantityInput.value || 1) - 1));
+
+      quantityMinus?.addEventListener('click', () => {
+        quantityInput.value = String(
+          Math.max(1, Number(quantityInput.value || 1) - 1)
+        );
         updateSummary();
       });
       cityInput?.addEventListener('input', updateSummary);
@@ -963,7 +1061,9 @@ document.addEventListener('variant:change', () => {
 
           formPanel.hidden = true;
           successPanel.hidden = false;
-          root.querySelector('[data-cod-order-name]').textContent = result.order?.name || '';
+          if (orderNameOutput) {
+            orderNameOutput.textContent = result.order?.name || '';
+          }
           emitEvent('cod_order_success', {
             orderName: result.order?.name || '',
             value: result.order?.total || 0,
