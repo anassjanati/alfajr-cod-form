@@ -6,12 +6,11 @@
 {% assign button_text_color = alfajr_cod_settings.buttonTextColor | default: "#FFFFFF" %}
 {% assign button_width = alfajr_cod_settings.buttonWidth | default: "100%" %}
 {% assign border_radius = alfajr_cod_settings.borderRadius | default: 14 %}
-{% assign custom_css = alfajr_cod_settings.customCss | default: "" %}
 
 <div
   class="alfajr-cart-cod-trigger"
   data-alfajr-cart-cod-trigger
-  data-alfajr-cod-source="cart-page"
+  data-alfajr-cod-source="cart-drawer"
 >
   <button
     type="button"
@@ -73,18 +72,12 @@
     font-size: 13px;
     font-weight: 700;
   }
-
-  {{ custom_css }}
 </style>
 
 <script>
   (() => {
     'use strict';
 
-    /*
-     * The delegated listener survives Shopify cart-drawer re-renders and
-     * prevents duplicate listeners when Shopify reloads a section.
-     */
     if (window.__ALFAJR_CART_COD_TRIGGER_V2__) return;
     window.__ALFAJR_CART_COD_TRIGGER_V2__ = true;
 
@@ -102,9 +95,7 @@
 
     function getCartUrl() {
       const root = String(window.Shopify?.routes?.root || '/');
-      const normalizedRoot = root.endsWith('/') ? root : `${root}/`;
-
-      return `${normalizedRoot}cart.js`;
+      return `${root.endsWith('/') ? root : `${root}/`}cart.js`;
     }
 
     function normalizeCartItem(item) {
@@ -114,7 +105,7 @@
 
       const quantity = toQuantity(item.quantity);
       const unitPriceCents = toCents(item.final_price ?? item.price ?? 0);
-      const linePrice = Number(item.final_line_price);
+      const finalLinePrice = Number(item.final_line_price);
 
       return {
         variantId,
@@ -131,8 +122,8 @@
               ? item.featured_image.url
               : '',
         unitPriceCents,
-        linePriceCents: Number.isFinite(linePrice)
-          ? toCents(linePrice)
+        linePriceCents: Number.isFinite(finalLinePrice)
+          ? toCents(finalLinePrice)
           : unitPriceCents * quantity
       };
     }
@@ -148,7 +139,7 @@
 
       return {
         mode: 'cart',
-        source: source || 'cart-page',
+        source,
         cartToken: String(cart.token || ''),
         currency: String(cart.currency || 'MAD'),
         itemCount: Number(cart.item_count || items.length),
@@ -181,11 +172,11 @@
       };
     }
 
-    function setLoading(button, isLoading) {
+    function setLoading(button, loading) {
       const { label } = getUi(button);
 
-      button.disabled = isLoading;
-      button.setAttribute('aria-busy', String(isLoading));
+      button.disabled = loading;
+      button.setAttribute('aria-busy', String(loading));
 
       if (!label) return;
 
@@ -193,7 +184,7 @@
         label.dataset.defaultLabel = label.textContent.trim();
       }
 
-      label.textContent = isLoading
+      label.textContent = loading
         ? 'Préparation de la commande...'
         : label.dataset.defaultLabel;
     }
@@ -214,18 +205,22 @@
 
       event.preventDefault();
 
-      const wrapper = button.closest('[data-alfajr-cart-cod-trigger]');
-      const source = wrapper?.dataset.alfajrCodSource || 'cart-page';
-
       try {
         setStatus(button);
         setLoading(button, true);
 
         const cart = await fetchFreshCart();
-        const context = createCartContext(cart, source);
+
+        const context = createCartContext(
+          cart,
+          button.closest('[data-alfajr-cart-cod-trigger]')
+            ?.dataset.alfajrCodSource || 'cart-drawer'
+        );
 
         if (typeof window.ALFajrCOD?.open !== 'function') {
-          throw new Error('Le formulaire de commande est indisponible sur cette page.');
+          throw new Error(
+            'Le formulaire de commande est indisponible sur cette page.'
+          );
         }
 
         window.ALFajrCOD.open(context, { trigger: button });
@@ -243,7 +238,7 @@
 
 {% schema %}
 {
-  "name": "AL FAJR Cart COD Trigger",
+  "name": "AL FAJR Cart COD Button",
   "target": "section",
   "settings": []
 }
