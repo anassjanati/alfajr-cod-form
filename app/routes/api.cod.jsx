@@ -1,8 +1,11 @@
-import { OrderService } from "../services/order.service";
 import { Buffer } from "node:buffer";
+import { randomUUID } from "node:crypto";
 import { authenticate } from "../shopify.server";
 import { createLogger } from "../lib/logger";
 import prisma from "../db.server";
+import { validateCodOrder } from "../lib/validation";
+import { getClientIp, checkCodRateLimits } from "../lib/rateLimiter";
+import { getShippingInfo } from "../Services/shipping.service";
 
 const JSON_HEADERS = {
   "Content-Type": "application/json; charset=utf-8",
@@ -11,26 +14,39 @@ const JSON_HEADERS = {
 };
 
 const MAX_BODY_BYTES = 32 * 1024;
+const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
 
 function json(data, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: {
-      ...JSON_HEADERS,
-      ...extraHeaders,
-    },
+    headers: { ...JSON_HEADERS, ...extraHeaders },
   });
 }
 
-function buildOrderNote(data) {
+function normalizePhone(phone) {
+  let value = String(phone || "").replace(/[\s\-()]/g, "").trim();
+  if (value.startsWith("+212")) value = `0${value.slice(4)}`;
+  if (value.startsWith("212")) value = `0${value.slice(3)}`;
+  return value;
+}
+
+function splitFullName(fullName) {
+  const parts = String(fullName || "").trim().split(/\s+/).filter(Boolean);
+  return {
+    firstName: parts.shift() || "Client",
+    lastName: parts.join(" ") || "COD",
+  };
+}
+
+function buildOrderNote(data, phone, shippingFee) {
   return [
     "AL FAJR COD Express",
     "",
     `Nom: ${data.fullName}`,
-    `Téléphone: ${data.phone}`,
+    `Téléphone: ${phone}`,
     `Ville: ${data.city}`,
     `Adresse: ${data.address}`,
-    `Livraison: ${data.shippingFee} DH`,
+    `Livraison: ${shippingFee} DH`,
     `Email: ${data.email || "-"}`,
     `Note client: ${data.notes || "-"}`,
     "",
@@ -49,7 +65,6 @@ function buildTrackingAttributes(data) {
     ["Landing page", data.landingPage],
     ["Referrer", data.referrer],
   ];
-
   return pairs
     .filter(([, value]) => Boolean(value))
     .map(([key, value]) => ({ key, value: String(value).slice(0, 500) }));
@@ -57,13 +72,11 @@ function buildTrackingAttributes(data) {
 
 async function readJsonBody(request) {
   const rawBody = await request.text();
-
   if (Buffer.byteLength(rawBody, "utf8") > MAX_BODY_BYTES) {
     const error = new Error("Request body is too large");
     error.status = 413;
     throw error;
   }
-
   try {
     return JSON.parse(rawBody || "{}");
   } catch {
@@ -74,17 +87,12 @@ async function readJsonBody(request) {
 }
 
 export async function loader() {
-  return json(
-    { success: false, message: "Method not allowed" },
-    405,
-    { Allow: "POST" }
-  );
+  return json({ success: false, message: "Method not allowed" }, 405, { Allow: "POST" });
 }
 
 export async function action({ request }) {
   const logger = createLogger({ endpoint: "api.cod", method: request.method });
-
-  let idempotencyKeyStr; // Renamed to avoid collision with destructured variable
+  let idempotencyKeyStr;
   let shop;
   let orderWasCreated = false;
 
@@ -93,57 +101,52 @@ export async function action({ request }) {
     const { admin, session } = proxyContext;
 
     if (!admin || !session?.shop) {
-      return json(
-        { success: false, message: "Application non autorisée pour cette boutique." },
-        401
-      );
+      return json({ success: false, message: "Non autorisé." }, 401);
     }
-
     shop = session.shop;
 
-    const submittedData = await readJsonBody(request);
-
-    const orderService = new OrderService({
-      request,
-      admin,
-      shop,
-    });
-
-    const processed = await orderService.process(submittedData);
-
-    if (!processed.ok) {
-      return json(processed.body, processed.status);
+    const clientIp = getClientIp(request);
+    const rateLimit = checkCodRateLimits({ shop, clientIp });
+    if (!rateLimit.allowed) {
+      return json({ success: false, message: "Trop de tentatives." }, 429);
     }
 
-    const {
-      data,
-      phone,
-      firstName,
-      lastName,
-      items,
-      shippingFee,
-      shippingTag,
-      idempotencyKey,
-    } = processed;
+    const submittedData = await readJsonBody(request);
+    const validation = validateCodOrder(submittedData);
+    if (!validation.success) {
+      return json({ success: false, message: "Vérifiez vos infos.", errors: validation.errors }, 422);
+    }
 
-    idempotencyKeyStr = idempotencyKey;
+    const data = validation.data;
+    idempotencyKeyStr = data.idempotencyKey || randomUUID();
 
-    // Switched to draftOrderCreate mutation
-    const mutation = `
-      mutation draftOrderCreate($input: DraftOrderInput!) {
-        draftOrderCreate(input: $input) {
-          draftOrder {
-            id
-            name
-            totalPrice
-          }
-          userErrors {
-            field
-            message
-          }
-        }
-      }
-    `;
+    const alreadyExists = await prisma.idempotentRequest.findUnique({
+      where: { idempotencyKey: idempotencyKeyStr },
+    });
+
+    if (alreadyExists) {
+      if (alreadyExists.status === "completed") return json(alreadyExists.response, 200);
+      return json({ success: false, message: "Commande en cours." }, 409);
+    }
+
+    await prisma.idempotentRequest.create({
+      data: {
+        idempotencyKey: idempotencyKeyStr,
+        shop,
+        status: "processing",
+        expiresAt: new Date(Date.now() + IDEMPOTENCY_TTL_MS),
+      },
+    });
+
+    // 1. حساب الشحن الجديد (من الداتا بيز أو فاس 20 درهم)
+    const { fee: shippingFee, tag: shippingTag } = await getShippingInfo(data.city, shop);
+    const phone = normalizePhone(data.phone);
+    const { firstName, lastName } = splitFullName(data.fullName);
+
+    const items = data.items?.length > 0 ? data.items : [{ variantId: data.variantId, quantity: data.quantity || 1 }];
+
+    // 2. حل مشكل الكليان (Customer): إعطاء إيميل وهمي إذا لم يقم بإدخاله لكي ينشئ Shopify حساب العميل
+    const customerEmail = data.email || `${phone.replace(/\D/g, '')}@cod.al-fajr.ma`;
 
     const customAttributes = [
       { key: "Nom complet", value: data.fullName },
@@ -154,77 +157,56 @@ export async function action({ request }) {
       { key: "Email", value: data.email || "-" },
       { key: "Note client", value: data.notes || "-" },
       { key: "Source", value: "AL FAJR COD Express" },
-      { key: "COD Request ID", value: idempotencyKey },
+      { key: "COD Request ID", value: idempotencyKeyStr },
       ...buildTrackingAttributes(data),
     ];
 
-    // Formatted for DraftOrderInput
-    const variables = {
+    // 3. إنشاء Draft Order أولا (كي يقوم Shopify بجمع ثمن المنتجات + الشحن)
+    const draftMutation = `
+      mutation draftOrderCreate($input: DraftOrderInput!) {
+        draftOrderCreate(input: $input) {
+          draftOrder { id name totalPrice }
+          userErrors { field message }
+        }
+      }
+    `;
+
+    const draftVariables = {
       input: {
         lineItems: items.map((item) => ({
           variantId: `gid://shopify/ProductVariant/${item.variantId}`,
           quantity: Number(item.quantity || 1),
         })),
-        ...(data.email ? { email: data.email } : {}),
-        tags: [
-          "COD",
-          "ALFAJR-COD-EXPRESS",
-          shippingTag,
-          `CITY-${data.city}`.slice(0, 255),
-          `COD-ID-${idempotencyKey.slice(0, 36)}`,
-        ],
-        note: buildOrderNote({
-          ...data,
-          phone,
-          shippingFee,
-        }),
+        email: customerEmail,
+        tags: ["COD", "ALFAJR-COD-EXPRESS", shippingTag, `CITY-${data.city}`.slice(0, 255)],
+        note: buildOrderNote(data, phone, shippingFee),
         shippingAddress: {
           firstName,
-          ...(lastName ? { lastName } : {}),
-          address1: data.address,
+          lastName,
+          address1: data.address || "Maroc",
           city: data.city,
           phone,
           countryCode: "MA",
         },
         shippingLine: {
           title: shippingFee === 20 ? "Livraison Fès" : "Livraison Maroc",
-          custom: true,
           price: shippingFee.toFixed(2),
         },
         customAttributes,
       },
     };
 
-    const shopifyResponse = await admin.graphql(mutation, { variables });
-    const responseJson = await shopifyResponse.json();
-    const result = responseJson?.data?.draftOrderCreate;
+    const draftResponse = await admin.graphql(draftMutation, { variables: draftVariables });
+    const draftJson = await draftResponse.json();
+    const draftResult = draftJson?.data?.draftOrderCreate;
 
-    if (!result) {
-      throw new Error("Shopify did not return a draftOrderCreate result");
+    if (draftResult?.userErrors?.length > 0) {
+      const errResp = { success: false, message: "Erreur lors de la création de la commande." };
+      await prisma.idempotentRequest.update({ where: { idempotencyKey: idempotencyKeyStr }, data: { status: "failed", response: errResp }});
+      return json(errResp, 400);
     }
 
-    if (result.userErrors?.length > 0) {
-      const errorResponse = {
-        success: false,
-        message: "La commande n'a pas pu être créée.",
-        errors: result.userErrors,
-      };
-
-      await prisma.idempotentRequest.update({
-        where: { idempotencyKey },
-        data: { status: "failed", response: errorResponse },
-      });
-
-      logger.warn("Shopify draftOrderCreate returned user errors", {
-        shop,
-        errors: result.userErrors,
-      });
-
-      return json(errorResponse, 400);
-    }
-
-    orderWasCreated = true;
-    // --- بدء كود تحويل المسودة إلى طلب نهائي ---
+    // 4. تحويل الـ Draft Order إلى Order حقيقي
     const completeMutation = `
       mutation draftOrderComplete($id: ID!) {
         draftOrderComplete(id: $id, paymentPending: true) {
@@ -233,130 +215,65 @@ export async function action({ request }) {
             order {
               id
               name
+              totalPriceSet { shopMoney { amount } }
             }
           }
-          userErrors {
-            field
-            message
-          }
+          userErrors { field message }
         }
       }
     `;
 
-    const completeResponse = await admin.graphql(completeMutation, {
-      variables: { id: result.draftOrder.id }
-    });
-
+    const completeResponse = await admin.graphql(completeMutation, { variables: { id: draftResult.draftOrder.id } });
     const completeJson = await completeResponse.json();
     const completeResult = completeJson?.data?.draftOrderComplete;
 
-    if (completeResult?.userErrors?.length > 0) {
-      logger.warn("Erreur lors de la conversion du Draft Order en Order", { 
-        errors: completeResult.userErrors 
-      });
-    }
+    orderWasCreated = true;
 
-    // استخراج رقم واسم الطلب النهائي (أو العودة للمسودة في حال حدوث خطأ)
-    const finalOrderId = completeResult?.draftOrder?.order?.id || result.draftOrder.id;
-    const finalOrderName = completeResult?.draftOrder?.order?.name || result.draftOrder.name;
-    // --- نهاية كود التحويل ---
-
-    const totalAmount = Number(result.draftOrder?.totalPrice || shippingFee);
+    const finalOrder = completeResult?.draftOrder?.order;
+    const finalTotal = finalOrder?.totalPriceSet?.shopMoney?.amount || draftResult.draftOrder.totalPrice;
 
     const successResponse = {
       success: true,
       message: "Votre commande a été enregistrée avec succès.",
       order: {
-        id: finalOrderId,     // تم التغيير هنا لاستخدام الطلب النهائي
-        name: finalOrderName, // تم التغيير هنا
-        total: totalAmount,
+        id: finalOrder?.id || draftResult.draftOrder.id,
+        name: finalOrder?.name || draftResult.draftOrder.name,
+        total: Number(finalTotal),
         currency: "MAD",
       },
       shippingFee,
     };
 
-    try {
-      await prisma.$transaction([
-        prisma.codOrder.create({
-          data: {
-            shop,
-            shopifyOrderId: finalOrderId, // تم التغيير هنا ليحفظ الـ Order ID
-            customerName: data.fullName,
-            customerPhone: phone,
-            city: data.city,
-            shippingFee,
-            total: totalAmount,
-            status: "pending",
-          },
-        }),
-        prisma.idempotentRequest.update({
-          where: { idempotencyKey: idempotencyKeyStr },
-          data: { status: "completed", response: successResponse },
-        }),
-      ]);
-    } catch (databaseLoggingError) {
-      logger.error("Order created but post-order database logging failed", {
-        shop,
-        orderId: result.draftOrder?.id,
-        message: databaseLoggingError?.message,
-      });
-    }
-
-    logger.info("COD Draft Order created successfully", {
-      shop,
-      orderId: result.draftOrder?.id,
-      orderName: result.draftOrder?.name,
-      shippingFee,
-    });
+    // 5. تسجيل الطلب في قاعدة البيانات لعرضه في الداشبورد
+    await prisma.$transaction([
+      prisma.codOrder.create({
+        data: {
+          shop,
+          shopifyOrderId: finalOrder?.id || draftResult.draftOrder.id,
+          customerName: data.fullName,
+          customerPhone: phone,
+          city: data.city,
+          shippingFee,
+          total: Number(finalTotal),
+          status: "pending",
+        },
+      }),
+      prisma.idempotentRequest.update({
+        where: { idempotencyKey: idempotencyKeyStr },
+        data: { status: "completed", response: successResponse },
+      }),
+    ]);
 
     return json(successResponse, 200);
+
   } catch (error) {
-    if (error instanceof Response) return error;
-
-    const status = Number(error?.status) || 500;
-    logger.error("COD API error", {
-      shop,
-      idempotencyKey: idempotencyKeyStr,
-      orderWasCreated,
-      message: error?.message,
-      stack: error?.stack,
-    });
-
-    if (idempotencyKeyStr && !orderWasCreated) {
-      const failureResponse = {
-        success: false,
-        message:
-          status < 500
-            ? error.message
-            : "Une erreur temporaire est survenue. Veuillez réessayer.",
-      };
-
-      try {
-        await prisma.idempotentRequest.update({
-          where: { idempotencyKey: idempotencyKeyStr },
-          data: { status: "failed", response: failureResponse },
-        });
-      } catch {
-        // Nothing else to do
-      }
+    logger.error("API Error", { message: error.message });
+    if (!orderWasCreated && idempotencyKeyStr) {
+      await prisma.idempotentRequest.update({
+        where: { idempotencyKey: idempotencyKeyStr },
+        data: { status: "failed", response: { success: false, message: "Erreur serveur." } }
+      }).catch(() => {});
     }
-
-    if (orderWasCreated) {
-      return json({
-        success: true,
-        message: "Votre commande a été enregistrée avec succès.",
-      });
-    }
-
-    return json(
-      {
-        success: false,
-        message:
-          status < 500
-            ? error.message
-            : "Une erreur temporaire est survenue. Veuillez réessayer.",
-      },
-      status
-    );
+    return json({ success: false, message: "Erreur serveur." }, 500);
   }
 }
