@@ -423,6 +423,15 @@
 </style>
 
 <script>
+// 1. قراءة مناطق الشحن المحفوظة من لوحة التحكم
+let shippingZones = [];
+try {
+  const zonesRaw = {{ app.metafields.cod_settings.shipping.value | json }};
+  shippingZones = typeof zonesRaw === 'string' ? JSON.parse(zonesRaw) : (zonesRaw || []);
+} catch(e) {
+  shippingZones = [];
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   const modal = document.getElementById("alfajr-cart-modal");
   const openBtn = document.getElementById("alfajr-open-cod");
@@ -449,10 +458,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function normalizePhone(phone) {
     let value = String(phone || "").replace(/\s|-/g, "").trim();
-
     if (value.startsWith("+212")) value = "0" + value.slice(4);
     if (value.startsWith("212")) value = "0" + value.slice(3);
-
     return value;
   }
 
@@ -478,26 +485,36 @@ document.addEventListener("DOMContentLoaded", () => {
   function isFesCity(city) {
     const fesAliases = new Set(["fes", "fez", "fas", "فاس", "فس"]);
     const normalizedCity = normalizeCity(city);
-
     if (!normalizedCity) return false;
-
-    return normalizedCity
-      .split(/\s+/)
-      .some((token) => fesAliases.has(token));
+    return normalizedCity.split(/\s+/).some((token) => fesAliases.has(token));
   }
 
+  // 2. تحديث دالة الشحن لتقرأ من لوحة التحكم الذكية
   function getShippingFee(city) {
-  return isFesCity(city) ? 20 : 35;
-}
+    const rawCity = city || "";
+    const normalized = normalizeCity(rawCity);
+    const isFes = isFesCity(rawCity);
 
-function escapeHtml(value) {
-  return String(value || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
+    if (isFes) {
+      const fesZone = shippingZones.find(z => isFesCity(z.zone));
+      return fesZone ? Number(fesZone.fee) : 20;
+    } else {
+      const specificZone = shippingZones.find(z => normalizeCity(z.zone) === normalized);
+      if (specificZone) return Number(specificZone.fee);
+
+      const defaultZone = shippingZones.find(z => normalizeCity(z.zone) === 'maroc' || normalizeCity(z.zone) === 'المغرب');
+      return defaultZone ? Number(defaultZone.fee) : 35;
+    }
+  }
+
+  function escapeHtml(value) {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
 
   function updateSummary(cart) {
     if (!cart) return { subtotal: 0, shipping: 35, total: 35 };
@@ -516,7 +533,6 @@ function escapeHtml(value) {
   async function loadCart() {
     const cart = await fetch("/cart.js").then((r) => r.json());
     currentCart = cart;
-
     container.innerHTML = "";
 
     if (!cart.items || cart.items.length === 0) {
@@ -536,40 +552,24 @@ function escapeHtml(value) {
     btn.disabled = false;
 
     cart.items.forEach((item) => {
-  const variant =
-    item.variant_title &&
-    item.variant_title !== 'Default Title'
-      ? `
-        <span class="alfajr-cart-product-variant">
-          Variante :
-          <b>${escapeHtml(item.variant_title)}</b>
-        </span>
-      `
-      : '';
+      const variant = item.variant_title && item.variant_title !== 'Default Title'
+        ? `
+          <span class="alfajr-cart-product-variant">
+            Variante : <b>${escapeHtml(item.variant_title)}</b>
+          </span>
+        ` : '';
 
-  container.innerHTML += `
-    <div class="alfajr-cart-product-item">
-      <img
-        src="${escapeHtml(item.image || '')}"
-        alt="${escapeHtml(item.product_title || 'Produit')}"
-      >
-
-      <div class="alfajr-cart-product-copy">
-        <strong>
-          ${escapeHtml(item.product_title || 'Produit')}
-        </strong>
-
-        ${variant}
-
-        <span>
-          Quantité : ${Number(item.quantity || 1)}
-          •
-          ${((item.final_line_price || 0) / 100).toFixed(2)} DH
-        </span>
-      </div>
-    </div>
-  `;
-});
+      container.innerHTML += `
+        <div class="alfajr-cart-product-item">
+          <img src="${escapeHtml(item.image || '')}" alt="${escapeHtml(item.product_title || 'Produit')}">
+          <div class="alfajr-cart-product-copy">
+            <strong>${escapeHtml(item.product_title || 'Produit')}</strong>
+            ${variant}
+            <span>Quantité : ${Number(item.quantity || 1)} • ${((item.final_line_price || 0) / 100).toFixed(2)} DH</span>
+          </div>
+        </div>
+      `;
+    });
 
     updateSummary(cart);
     return cart;
@@ -577,9 +577,7 @@ function escapeHtml(value) {
 
   function validateForm() {
     clearErrors();
-
     let valid = true;
-
     const fullName = form.full_name?.value || "";
     const phone = form.phone?.value || "";
     const city = form.city?.value || "";
@@ -590,27 +588,22 @@ function escapeHtml(value) {
       setError("full_name", "Veuillez entrer votre nom complet.");
       valid = false;
     }
-
     if (form.phone && !isValidMoroccanPhone(phone)) {
       setError("phone", "Veuillez entrer un numéro marocain valide.");
       valid = false;
     }
-
     if (form.city && city.trim().length < 2) {
       setError("city", "Veuillez entrer votre ville.");
       valid = false;
     }
-
     if (form.address && address.trim().length < 5) {
       setError("address", "Veuillez entrer une adresse complète.");
       valid = false;
     }
-
     if (form.email && email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       setError("email", "Veuillez entrer un email valide.");
       valid = false;
     }
-
     return valid;
   }
 
@@ -629,10 +622,6 @@ function escapeHtml(value) {
 
   closeBtn?.addEventListener('click', closeModal);
 
-// الضغط خارج الفورم لا يغلقه.
-// زر Escape لا يغلقه.
-// الإغلاق متاح فقط عبر زر X.
-
   form.city?.addEventListener("input", () => {
     if (currentCart) updateSummary(currentCart);
   });
@@ -641,18 +630,15 @@ function escapeHtml(value) {
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
-
     if (!validateForm()) return;
 
     const cart = currentCart || await fetch("/cart.js").then((r) => r.json());
-
     if (!cart.items || cart.items.length === 0) {
       alert("Votre panier est vide.");
       return;
     }
 
     const totals = updateSummary(cart);
-
     const params = new URLSearchParams(window.location.search);
     const idempotencyKey = form.idempotency_key.value || (window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`);
     form.idempotency_key.value = idempotencyKey;
@@ -687,15 +673,14 @@ function escapeHtml(value) {
 
       const response = await fetch("/apps/alfajr-cod/api/cod", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data)
       });
 
       const result = await response.json();
 
       if (result.success) {
+        // 3. تحديث القيم التي يتم حفظها لصفحة الشكر لتعكس الحسابات الجديدة
         sessionStorage.setItem("alfajr_cod_order", JSON.stringify({
           productTitle: cart.item_count + " article(s)",
           productImage: cart.items[0]?.image || "",
@@ -704,8 +689,8 @@ function escapeHtml(value) {
           city: data.city,
           address: data.address,
           quantity: cart.item_count,
-          shippingFee: data.shippingFee,
-          total: data.total,
+          shippingFee: totals.shipping, // تم التحديث هنا
+          total: totals.total,          // تم التحديث هنا
           email: data.email,
           notes: data.notes
         }));

@@ -88,6 +88,43 @@ async function saveSettingsToShopifyMetafield(admin, settings) {
   }
 }
 
+async function saveShippingZonesToShopifyMetafield(admin, zones) {
+  const response = await admin.graphql(`
+    query { currentAppInstallation { id } }
+  `);
+  const json = await response.json();
+  const appInstallationId = json?.data?.currentAppInstallation?.id;
+
+  if (!appInstallationId) return;
+
+  // تنظيف البيانات قبل حفظها
+  const formattedZones = zones.map(z => ({
+    zone: z.zone,
+    fee: z.fee
+  }));
+
+  await admin.graphql(
+    `mutation metafieldsSet($metafields: [MetafieldsSetInput!]!) {
+      metafieldsSet(metafields: $metafields) {
+        userErrors { message }
+      }
+    }`,
+    {
+      variables: {
+        metafields: [
+          {
+            ownerId: appInstallationId,
+            namespace: "cod_settings",
+            key: "shipping",
+            type: "json",
+            value: JSON.stringify(formattedZones)
+          }
+        ]
+      }
+    }
+  );
+}
+
 export async function loader({ request }) {
   const { session } = await authenticate.admin(request);
   const shop = session.shop;
@@ -218,6 +255,10 @@ export async function action({ request }) {
         }
       });
 
+      // مزامنة التحديث مع Metafields
+      const updatedZones = await prisma.shippingZone.findMany({ where: { shop } });
+      await saveShippingZonesToShopifyMetafield(admin, updatedZones);
+
       return { success: true, message: "Zone de livraison ajoutée" };
     }
 
@@ -225,6 +266,10 @@ export async function action({ request }) {
       await prisma.shippingZone.delete({
         where: { id: Number(formData.get("zoneId")) }
       });
+
+      // مزامنة التحديث مع Metafields
+      const updatedZones = await prisma.shippingZone.findMany({ where: { shop } });
+      await saveShippingZonesToShopifyMetafield(admin, updatedZones);
 
       return { success: true, message: "Zone supprimée" };
     }

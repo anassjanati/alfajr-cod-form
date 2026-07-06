@@ -798,7 +798,30 @@
         return normalizeCity(city).split(/\s+/).some((token) => aliases.has(token));
       }
 
-      function shippingFee() { return isFes(cityInput?.value) ? 20 : 35; }
+      // جلب مناطق الشحن من الـ Metafields (لوحة التحكم)
+const shippingZones = {{ app.metafields.cod_settings.shipping.value | json }} || [];
+
+function shippingFee() {
+  // الحصول على اسم المدينة التي أدخلها العميل
+  const rawCity = (typeof cityInput !== 'undefined' ? cityInput?.value : form?.city?.value) || "";
+  const city = normalizeCity(rawCity);
+  
+  const isFesCity = isFes(rawCity);
+
+  if (isFesCity) {
+    // إذا كانت فاس، نتحقق مما إذا كان التاجر قد حدد لها سعراً في لوحة التحكم
+    const fesZone = shippingZones.find(z => isFes(z.zone));
+    return fesZone ? Number(fesZone.fee) : 20;
+  } else {
+    // إذا لم تكن فاس، نبحث عن المدينة المحددة في لوحة التحكم
+    const specificZone = shippingZones.find(z => normalizeCity(z.zone) === city);
+    if (specificZone) return Number(specificZone.fee);
+
+    // إذا لم تكن مسجلة، نبحث عن السعر الافتراضي للمغرب، أو نطبق 35 درهم
+    const defaultZone = shippingZones.find(z => normalizeCity(z.zone) === 'maroc' || normalizeCity(z.zone) === 'المغرب');
+    return defaultZone ? Number(defaultZone.fee) : 35;
+  }
+}
 
       function currentVariantId() {
         const productSection = root.closest('section') || document;
