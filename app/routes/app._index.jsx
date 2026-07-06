@@ -344,7 +344,7 @@ export default function PremiumDashboard() {
             {activeTab === "email" && "Notifications par Email"}
             {activeTab === "orders" && "Historique des Commandes"}
           </h1>
-          <p className="header-subtitle">Application professionnelle pour gérer les commandes COD au Maroc.</p>
+          <p className="header-subtitle">Application professionnelle pour gérer les commandes COD au maroc.</p>
         </div>
 
         {actionData?.success && (
