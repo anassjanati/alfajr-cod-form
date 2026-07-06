@@ -80,6 +80,13 @@
   </div>
 </div>
 
+<div
+  class="alfajr-cod-v2__cart-products"
+  data-cod-cart-products
+  aria-live="polite"
+  hidden
+></div>
+
         <form class="alfajr-cod-v2__form" data-cod-form novalidate>
           <input type="hidden" name="variant_id" value="{{ product.selected_or_first_available_variant.id }}">
           <input type="hidden" name="form_started_at" value="">
@@ -696,6 +703,30 @@
     @media (prefers-reduced-motion: reduce) {
       [data-alfajr-cod-root="{{ block.id }}"] * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
     }
+
+    [data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__cart-products {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+[data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__cart-products[hidden] {
+  display: none !important;
+}
+
+[data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__cart-products .alfajr-cod-v2__product {
+  margin-bottom: 0;
+}
+
+[data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__cart-line-total {
+  white-space: nowrap;
+  color: #0f172a !important;
+  font-weight: 850;
+}
+
+[data-alfajr-cod-root="{{ block.id }}"] .alfajr-cod-v2__product[hidden] {
+  display: none !important;
+}
   </style>
 
   <script>
@@ -752,6 +783,20 @@
       const quantityPlus = overlay.querySelector('[data-qty-plus]');
       const quantityMinus = overlay.querySelector('[data-qty-minus]');
 
+      const productCard = overlay.querySelector('[data-cod-product-card]');
+      const cartProducts = overlay.querySelector('[data-cod-cart-products]');
+      const quantityField = quantityInput?.closest('.alfajr-cod-v2__field--quantity');
+
+      let checkoutContext = {
+        mode: 'product',
+        source: 'product-page',
+        variantId: '',
+        items: [],
+        subtotalCents: 0
+      };
+
+      let lastOpener = openButton;
+
       if (
         !form ||
         !formPanel ||
@@ -774,6 +819,153 @@
       }
 
       const money = (value) => `${Number(value || 0).toFixed(2)} DH`;
+      const moneyFromCents = (value) => money(Number(value || 0) / 100);
+
+function toCents(value) {
+  const amount = Number(value);
+  return Number.isFinite(amount) ? Math.max(0, Math.round(amount)) : 0;
+}
+
+function normalizeCartItems(rawItems) {
+  return (Array.isArray(rawItems) ? rawItems : [])
+    .map((item) => {
+      const variantId = String(item?.variantId || '').trim();
+
+      if (!variantId) return null;
+
+      const quantity = Math.min(
+        100,
+        Math.max(1, Math.floor(Number(item.quantity || 1)))
+      );
+
+      const unitPriceCents = toCents(item.unitPriceCents);
+      const linePrice = Number(item.linePriceCents);
+
+      return {
+        variantId,
+        quantity,
+        title: String(item.title || 'Produit'),
+        variantTitle: String(item.variantTitle || ''),
+        image: String(item.image || ''),
+        unitPriceCents,
+        linePriceCents: Number.isFinite(linePrice)
+          ? toCents(linePrice)
+          : unitPriceCents * quantity
+      };
+    })
+    .filter(Boolean);
+}
+
+function renderCartProducts(items) {
+  if (!cartProducts) return;
+
+  const fragment = document.createDocumentFragment();
+
+  items.forEach((item) => {
+    const card = document.createElement('div');
+    card.className = 'alfajr-cod-v2__product';
+
+    if (item.image) {
+      const image = document.createElement('img');
+      image.src = item.image;
+      image.alt = item.title;
+      image.width = 76;
+      image.height = 76;
+      image.loading = 'eager';
+
+      image.addEventListener('error', () => image.remove(), { once: true });
+
+      card.appendChild(image);
+    }
+
+    const copy = document.createElement('div');
+    copy.className = 'alfajr-cod-v2__product-copy';
+
+    const title = document.createElement('strong');
+    title.textContent = item.title;
+    copy.appendChild(title);
+
+    if (item.variantTitle && item.variantTitle !== 'Default Title') {
+      const variant = document.createElement('span');
+      variant.className = 'alfajr-cod-v2__variant';
+
+      const prefix = document.createTextNode('Variante : ');
+      const value = document.createElement('b');
+      value.textContent = item.variantTitle;
+
+      variant.append(prefix, value);
+      copy.appendChild(variant);
+    }
+
+    const meta = document.createElement('span');
+    meta.className = 'alfajr-cod-v2__product-meta';
+
+    const quantity = document.createElement('span');
+    quantity.textContent = `Quantité : ${item.quantity}`;
+
+    const lineTotal = document.createElement('b');
+    lineTotal.className = 'alfajr-cod-v2__cart-line-total';
+    lineTotal.textContent = moneyFromCents(item.linePriceCents);
+
+    meta.append(quantity, document.createTextNode(' • '), lineTotal);
+    copy.appendChild(meta);
+
+    card.appendChild(copy);
+    fragment.appendChild(card);
+  });
+
+  cartProducts.replaceChildren(fragment);
+}
+
+function setCheckoutContext(context = {}) {
+  const isCartCheckout = context.mode === 'cart';
+
+  if (!isCartCheckout) {
+    checkoutContext = {
+      mode: 'product',
+      source: context.source || 'product-page',
+      variantId: String(context.variantId || ''),
+      items: [],
+      subtotalCents: 0
+    };
+
+    if (productCard) productCard.hidden = false;
+    if (cartProducts) cartProducts.hidden = true;
+    if (quantityField) quantityField.hidden = false;
+    if (quantityInput) quantityInput.disabled = false;
+
+    return;
+  }
+
+  const items = normalizeCartItems(context.items);
+
+  if (!items.length) {
+    throw new Error('Votre panier est vide. Ajoutez un produit avant de commander.');
+  }
+
+  const suppliedSubtotal = Number(context.subtotalCents);
+  const subtotalCents = Number.isFinite(suppliedSubtotal)
+    ? toCents(suppliedSubtotal)
+    : items.reduce((sum, item) => sum + item.linePriceCents, 0);
+
+  checkoutContext = {
+    mode: 'cart',
+    source: String(context.source || 'cart-page'),
+    items,
+    subtotalCents
+  };
+
+  if (productCard) productCard.hidden = true;
+
+  if (cartProducts) {
+    cartProducts.hidden = false;
+    renderCartProducts(items);
+  }
+
+  if (quantityField) quantityField.hidden = true;
+  if (quantityInput) quantityInput.disabled = true;
+  if (variantInput) variantInput.value = '';
+}
       const createRequestId = () =>
         window.crypto?.randomUUID?.() ||
         `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
@@ -799,9 +991,20 @@
       }
 
       // جلب مناطق الشحن من الـ Metafields (لوحة التحكم)
-const shippingZones = {{ app.metafields.cod_settings.shipping.value | json }} || [];
+      const rawShippingZones = {{ app.metafields.cod_settings.shipping.value | json }};
+      let shippingZones = [];
 
-function shippingFee() {
+      try {
+        shippingZones = Array.isArray(rawShippingZones)
+          ? rawShippingZones
+          : typeof rawShippingZones === 'string'
+            ? JSON.parse(rawShippingZones)
+            : [];
+      } catch (_) {
+        shippingZones = [];
+      }
+
+      function shippingFee() {
   // الحصول على اسم المدينة التي أدخلها العميل
   const rawCity = (typeof cityInput !== 'undefined' ? cityInput?.value : form?.city?.value) || "";
   const city = normalizeCity(rawCity);
@@ -824,63 +1027,84 @@ function shippingFee() {
 }
 
       function currentVariantId() {
-        const productSection = root.closest('section') || document;
-        const selectors = [
-          'form[action*="/cart/add"] [name="id"]',
-          'input[name="id"]:checked',
-          'select[name="id"]',
-          'input[name="variant-id"]'
-        ];
+  if (checkoutContext.mode === 'product' && checkoutContext.variantId) {
+    return checkoutContext.variantId;
+  }
 
-        for (const selector of selectors) {
-          const element = productSection.querySelector(selector) || document.querySelector(selector);
-          if (element?.value) return String(element.value);
-        }
+  const productSection = root.closest('section') || document;
 
-        return new URLSearchParams(location.search).get('variant') || root.dataset.defaultVariant;
-      }
+  const selectors = [
+    'form[action*="/cart/add"] [name="id"]',
+    'input[name="id"]:checked',
+    'select[name="id"]',
+    'input[name="variant-id"]'
+  ];
+
+  for (const selector of selectors) {
+    const element =
+      productSection.querySelector(selector) ||
+      document.querySelector(selector);
+
+    if (element?.value) return String(element.value);
+  }
+
+  return (
+    new URLSearchParams(location.search).get('variant') ||
+    root.dataset.defaultVariant
+  );
+}
 
       function updateSummary() {
-       const variantId = currentVariantId();
+  const shipping = shippingFee();
 
-if (variantInput && variantId) {
-  variantInput.value = variantId;
+  if (checkoutContext.mode === 'cart') {
+    const subtotal = Number(checkoutContext.subtotalCents || 0) / 100;
+
+    if (subtotalOutput) subtotalOutput.textContent = money(subtotal);
+    if (shippingOutput) shippingOutput.textContent = money(shipping);
+    if (totalOutput) totalOutput.textContent = money(subtotal + shipping);
+
+    return;
+  }
+
+  const variantId = currentVariantId();
+
+  if (variantInput && variantId) {
+    variantInput.value = variantId;
+  }
+
+  const selectedVariant = variantData[variantId] || {};
+  const selectedUnitPrice = Number(selectedVariant.price || 0) / 100;
+
+  const quantity = Math.min(
+    100,
+    Math.max(1, Number(quantityInput?.value || 1))
+  );
+
+  const subtotal = selectedUnitPrice * quantity;
+
+  if (variantTitle) {
+    variantTitle.textContent = selectedVariant.title || '';
+  }
+
+  if (variantRow) {
+    variantRow.hidden =
+      !selectedVariant.title ||
+      selectedVariant.title === 'Default Title';
+  }
+
+  if (unitPrice) {
+    unitPrice.textContent = money(selectedUnitPrice);
+  }
+
+  if (productImage && selectedVariant.image) {
+    productImage.src = selectedVariant.image;
+  }
+
+  if (subtotalOutput) subtotalOutput.textContent = money(subtotal);
+  if (shippingOutput) shippingOutput.textContent = money(shipping);
+  if (totalOutput) totalOutput.textContent = money(subtotal + shipping);
 }
-
-const selectedVariant = variantData[variantId] || {};
-const selectedUnitPrice = Number(selectedVariant.price || 0) / 100;
-
-const quantity = Math.min(
-  100,
-  Math.max(1, Number(quantityInput?.value || 1))
-);
-
-const shipping = shippingFee();
-const subtotal = selectedUnitPrice * quantity;
-
-if (variantTitle) {
-  variantTitle.textContent = selectedVariant.title || '';
-}
-
-if (variantRow) {
-  variantRow.hidden =
-    !selectedVariant.title ||
-    selectedVariant.title === 'Default Title';
-}
-
-if (unitPrice) {
-  unitPrice.textContent = money(selectedUnitPrice);
-}
-
-if (productImage && selectedVariant.image) {
-  productImage.src = selectedVariant.image;
-}
-
-        if (subtotalOutput) subtotalOutput.textContent = money(subtotal);
-        if (shippingOutput) shippingOutput.textContent = money(shipping);
-        if (totalOutput) totalOutput.textContent = money(subtotal + shipping);
-      }
-
       function normalizePhone(value) {
         let phone = String(value || '').replace(/[\s\-()]/g, '').trim();
         if (phone.startsWith('+212')) phone = `0${phone.slice(4)}`;
@@ -953,36 +1177,94 @@ if (productImage && selectedVariant.image) {
         };
       }
 
-      function open() {
-        formPanel.hidden = false;
-        successPanel.hidden = true;
-        form.elements.form_started_at.value = String(Date.now());
-        form.elements.idempotency_key.value = createRequestId();
+      function openModal(trigger) {
+  lastOpener =
+    trigger instanceof HTMLElement
+      ? trigger
+      : document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : openButton;
 
-        overlay.classList.add('is-open');
-        overlay.setAttribute('aria-hidden', 'false');
-        document.documentElement.classList.add('alfajr-cod-modal-open');
-        document.body.classList.add('alfajr-cod-modal-open');
+  formPanel.hidden = false;
+  successPanel.hidden = true;
 
-        formPanel.scrollTop = 0;
-        successPanel.scrollTop = 0;
-        updateSummary();
-        emitEvent('cod_form_view', { variantId: currentVariantId() });
+  clearErrors();
 
-        window.setTimeout(() => {
-          form.elements.full_name?.focus({ preventScroll: true });
-        }, 80);
-      }
+  form.elements.form_started_at.value = String(Date.now());
+  form.elements.idempotency_key.value = createRequestId();
+  form.dataset.started = '';
 
-      function close() {
-        overlay.classList.remove('is-open');
-        overlay.setAttribute('aria-hidden', 'true');
-        document.documentElement.classList.remove('alfajr-cod-modal-open');
-        document.body.classList.remove('alfajr-cod-modal-open');
-        openButton.focus({ preventScroll: true });
-      }
+  overlay.classList.add('is-open');
+  overlay.setAttribute('aria-hidden', 'false');
 
-      openButton.addEventListener('click', open);
+  document.documentElement.classList.add('alfajr-cod-modal-open');
+  document.body.classList.add('alfajr-cod-modal-open');
+
+  formPanel.scrollTop = 0;
+  successPanel.scrollTop = 0;
+
+  updateSummary();
+
+  emitEvent('cod_form_view', {
+    mode: checkoutContext.mode,
+    source: checkoutContext.source,
+    variantId:
+      checkoutContext.mode === 'product'
+        ? currentVariantId()
+        : '',
+    itemCount:
+      checkoutContext.mode === 'cart'
+        ? checkoutContext.items.length
+        : 1
+  });
+
+  window.setTimeout(() => {
+    form.elements.full_name?.focus({ preventScroll: true });
+  }, 80);
+}
+
+function openCheckout(context = {}, trigger) {
+  setCheckoutContext(context);
+  openModal(trigger);
+}
+
+function close() {
+  overlay.classList.remove('is-open');
+  overlay.setAttribute('aria-hidden', 'true');
+
+  document.documentElement.classList.remove('alfajr-cod-modal-open');
+  document.body.classList.remove('alfajr-cod-modal-open');
+
+  if (lastOpener?.isConnected) {
+    lastOpener.focus({ preventScroll: true });
+  } else {
+    openButton.focus({ preventScroll: true });
+  }
+}
+
+openButton.addEventListener('click', () => {
+  openCheckout(
+    {
+      mode: 'product',
+      source: 'product-page'
+    },
+    openButton
+  );
+});
+
+window.ALFajrCOD = window.ALFajrCOD || {};
+
+if (
+  typeof window.ALFajrCOD.open !== 'function' ||
+  !window.ALFajrCOD._modalRoot?.isConnected
+) {
+  window.ALFajrCOD.open = (context, options = {}) => {
+    openCheckout(context, options.trigger);
+  };
+
+  window.ALFajrCOD.close = close;
+  window.ALFajrCOD._modalRoot = root;
+}
 
       closeButtons.forEach((button) => {
         button.addEventListener('click', close);
@@ -1024,11 +1306,23 @@ document.addEventListener('variant:change', () => {
 });
 
       form.addEventListener('input', () => {
-        if (!form.dataset.started) {
-          form.dataset.started = 'true';
-          emitEvent('cod_form_start', { variantId: currentVariantId() });
-        }
-      }, { once: true });
+        if (form.dataset.started) return;
+
+        form.dataset.started = 'true';
+
+        emitEvent('cod_form_start', {
+          mode: checkoutContext.mode,
+          source: checkoutContext.source,
+          variantId:
+            checkoutContext.mode === 'product'
+              ? currentVariantId()
+              : '',
+          itemCount:
+            checkoutContext.mode === 'cart'
+              ? checkoutContext.items.length
+              : 1
+        });
+      });
 
       form.addEventListener('submit', async (event) => {
         event.preventDefault();
@@ -1037,26 +1331,52 @@ document.addEventListener('variant:change', () => {
         const requestId = form.elements.idempotency_key.value || createRequestId();
         form.elements.idempotency_key.value = requestId;
 
-        const payload = {
-          variantId: currentVariantId(),
-          quantity: Math.min(100, Math.max(1, Number(quantityInput?.value || 1))),
-          fullName: form.elements.full_name?.value?.trim() || '',
-          phone: normalizePhone(form.elements.phone?.value || ''),
-          city: form.elements.city?.value?.trim() || '',
-          address: form.elements.address?.value?.trim() || '',
-          email: form.elements.email?.value?.trim() || '',
-          notes: form.elements.notes?.value?.trim() || '',
-          website: form.elements.website?.value || '',
-          formStartedAt: Number(form.elements.form_started_at.value || Date.now()),
-          idempotencyKey: requestId,
-          ...trackingData()
-        };
+        const isCartCheckout = checkoutContext.mode === 'cart';
+
+const payload = {
+  ...(isCartCheckout
+    ? {
+        items: checkoutContext.items.map((item) => ({
+          variantId: item.variantId,
+          quantity: item.quantity
+        }))
+      }
+    : {
+        variantId: currentVariantId(),
+        quantity: Math.min(
+          100,
+          Math.max(1, Number(quantityInput?.value || 1))
+        )
+      }),
+
+  fullName: form.elements.full_name?.value?.trim() || '',
+  phone: normalizePhone(form.elements.phone?.value || ''),
+  city: form.elements.city?.value?.trim() || '',
+  address: form.elements.address?.value?.trim() || '',
+  email: form.elements.email?.value?.trim() || '',
+  notes: form.elements.notes?.value?.trim() || '',
+  website: form.elements.website?.value || '',
+  formStartedAt: Number(form.elements.form_started_at.value || Date.now()),
+  idempotencyKey: requestId,
+  ...trackingData()
+};
+
+if (!isCartCheckout && !payload.variantId) {
+  status.textContent = 'Veuillez sélectionner une variante disponible.';
+  return;
+}
 
         submitButton.disabled = true;
         submitLabel.textContent = 'Enregistrement...';
         submitSpinner.hidden = false;
         status.textContent = '';
-        emitEvent('cod_submit', { variantId: payload.variantId, city: payload.city });
+        emitEvent('cod_submit', {
+  mode: checkoutContext.mode,
+  source: checkoutContext.source,
+  variantId: payload.variantId || '',
+  itemCount: isCartCheckout ? payload.items.length : 1,
+  city: payload.city
+});
 
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 15000);
