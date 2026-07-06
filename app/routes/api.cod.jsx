@@ -267,8 +267,8 @@ export async function action({ request }) {
       success: true,
       message: "Votre commande a été enregistrée avec succès.",
       order: {
-        id: result.draftOrder?.id,
-        name: result.draftOrder?.name,
+        id: finalOrderId,     // تم التغيير هنا لاستخدام الطلب النهائي
+        name: finalOrderName, // تم التغيير هنا
         total: totalAmount,
         currency: "MAD",
       },
@@ -280,7 +280,7 @@ export async function action({ request }) {
         prisma.codOrder.create({
           data: {
             shop,
-            shopifyOrderId: result.draftOrder?.id || null, // Now stores Draft Order ID
+            shopifyOrderId: finalOrderId, // تم التغيير هنا ليحفظ الـ Order ID
             customerName: data.fullName,
             customerPhone: phone,
             city: data.city,
@@ -290,7 +290,7 @@ export async function action({ request }) {
           },
         }),
         prisma.idempotentRequest.update({
-          where: { idempotencyKey },
+          where: { idempotencyKey: idempotencyKeyStr },
           data: { status: "completed", response: successResponse },
         }),
       ]);

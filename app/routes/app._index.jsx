@@ -97,7 +97,6 @@ async function saveShippingZonesToShopifyMetafield(admin, zones) {
 
   if (!appInstallationId) return;
 
-  // تنظيف البيانات قبل حفظها
   const formattedZones = zones.map(z => ({
     zone: z.zone,
     fee: z.fee
@@ -255,7 +254,6 @@ export async function action({ request }) {
         }
       });
 
-      // مزامنة التحديث مع Metafields
       const updatedZones = await prisma.shippingZone.findMany({ where: { shop } });
       await saveShippingZonesToShopifyMetafield(admin, updatedZones);
 
@@ -267,7 +265,6 @@ export async function action({ request }) {
         where: { id: Number(formData.get("zoneId")) }
       });
 
-      // مزامنة التحديث مع Metafields
       const updatedZones = await prisma.shippingZone.findMany({ where: { shop } });
       await saveShippingZonesToShopifyMetafield(admin, updatedZones);
 
@@ -310,82 +307,62 @@ export default function PremiumDashboard() {
   );
 
   return (
-    <div className="premium-container">
-      <div className="header-section">
-        <h1 className="header-title">🚀 AL FAJR COD Express</h1>
-        <p className="header-subtitle">
-          Application professionnelle pour gérer les commandes COD au Maroc.
-        </p>
-      </div>
+    <div className="app-layout">
+      {/* 🚀 السايدبار الجديد 🚀 */}
+      <aside className="sidebar">
+        <div className="logo-area">
+          <h3>AL FAJR COD</h3>
+          <span>Express</span>
+        </div>
+        <nav className="nav-menu">
+          {[
+            { id: "dashboard", label: "📊 Tableau de bord" },
+            { id: "customization", label: "🎨 Form Builder" },
+            { id: "shipping", label: "🚚 Livraison" },
+            { id: "email", label: "✉️ Notifications" },
+            { id: "orders", label: "📦 Commandes" },
+          ].map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={`nav-link ${activeTab === item.id ? "active" : ""}`}
+              onClick={() => setActiveTab(item.id)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </nav>
+      </aside>
 
-      {actionData?.success && (
-        <div className="alert alert-success">✓ {actionData.message}</div>
-      )}
+      {/* 🚀 المحتوى الرئيسي 🚀 */}
+      <main className="main-content">
+        <div className="header-bar">
+          <h1 className="header-title">
+            {activeTab === "dashboard" && "Tableau de bord"}
+            {activeTab === "customization" && "Personnalisation du Formulaire"}
+            {activeTab === "shipping" && "Gestion de la Livraison"}
+            {activeTab === "email" && "Notifications par Email"}
+            {activeTab === "orders" && "Historique des Commandes"}
+          </h1>
+          <p className="header-subtitle">Application professionnelle pour gérer les commandes COD au Maroc.</p>
+        </div>
 
-      {actionData?.success === false && (
-        <div className="alert alert-error">✗ {actionData.message}</div>
-      )}
-
-      <div className="tabs-container">
-        <button
-          type="button"
-          className={`tab-button ${activeTab === "dashboard" ? "active" : ""}`}
-          onClick={() => setActiveTab("dashboard")}
-        >
-          📊 Tableau de bord
-        </button>
-
-        <button
-          type="button"
-          className={`tab-button ${activeTab === "customization" ? "active" : ""}`}
-          onClick={() => setActiveTab("customization")}
-        >
-          🎨 Form Builder
-        </button>
-
-        <button
-          type="button"
-          className={`tab-button ${activeTab === "shipping" ? "active" : ""}`}
-          onClick={() => setActiveTab("shipping")}
-        >
-          🚚 Livraison
-        </button>
-
-        <button
-          type="button"
-          className={`tab-button ${activeTab === "email" ? "active" : ""}`}
-          onClick={() => setActiveTab("email")}
-        >
-          ✉️ Notifications
-        </button>
-
-        <button
-          type="button"
-          className={`tab-button ${activeTab === "orders" ? "active" : ""}`}
-          onClick={() => setActiveTab("orders")}
-        >
-          📦 Commandes
-        </button>
-      </div>
-
-      <div className="tab-content">
-        {activeTab === "dashboard" && (
-          <DashboardTab stats={orderStats} orders={orders} />
+        {actionData?.success && (
+          <div className="alert alert-success">✓ {actionData.message}</div>
         )}
 
-        {activeTab === "customization" && (
-          <CustomizationTab
-            settings={previewSettings}
-            setSettings={setPreviewSettings}
-          />
+        {actionData?.success === false && (
+          <div className="alert alert-error">✗ {actionData.message}</div>
         )}
 
-        {activeTab === "shipping" && <ShippingTab zones={zones} />}
-
-        {activeTab === "email" && <EmailTab emailSettings={emailSettings} />}
-
-        {activeTab === "orders" && <OrdersTab orders={orders} />}
-      </div>
+        <div className="tab-content">
+          {activeTab === "dashboard" && <DashboardTab stats={orderStats} orders={orders} />}
+          {activeTab === "customization" && <CustomizationTab settings={previewSettings} setSettings={setPreviewSettings} />}
+          {activeTab === "shipping" && <ShippingTab zones={zones} />}
+          {activeTab === "email" && <EmailTab emailSettings={emailSettings} />}
+          {activeTab === "orders" && <OrdersTab orders={orders} />}
+        </div>
+      </main>
     </div>
   );
 }
