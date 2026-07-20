@@ -12,6 +12,8 @@ const ItemSchema = z.object({
 });
 
 const OptionalTrackingString = z.string().trim().max(500).optional().or(z.literal(""));
+const OptionalMetaId = z.string().trim().max(255).optional().or(z.literal(""));
+const OptionalTrackingUrl = z.string().trim().max(1000).optional().or(z.literal(""));
 
 const CodOrderSchema = z
   .object({
@@ -37,7 +39,11 @@ const CodOrderSchema = z
     utmContent: OptionalTrackingString,
     utmTerm: OptionalTrackingString,
     fbclid: OptionalTrackingString,
-    landingPage: OptionalTrackingString,
+    fbp: OptionalMetaId,
+    fbc: OptionalMetaId,
+    externalId: z.string().trim().max(128).optional().or(z.literal("")),
+    landingPage: OptionalTrackingUrl,
+    eventSourceUrl: OptionalTrackingUrl,
     referrer: OptionalTrackingString,
   })
   .refine(

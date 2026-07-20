@@ -123,3 +123,12 @@ Allow `SHOP_REDACT` webhook to process without admin context
 ## v2024.07.16
 
 Started tracking changes and releases using calver
+
+## Merchant Meta settings
+
+- Added a Meta Pixel & Conversions API section to the embedded app.
+- Added isolated per-shop Meta credentials with encrypted access-token storage.
+- Added automatic browser `Purchase` delivery to each merchant's configured Pixel.
+- Added server/browser deduplication with the same event ID.
+- Added last Meta delivery status to the merchant dashboard.
+- Added a protected legacy environment fallback restricted by `META_LEGACY_SHOP`.

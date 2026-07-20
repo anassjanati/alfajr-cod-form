@@ -3,6 +3,11 @@ import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import "../styles/premium.css";
 import { useState } from "react";
+import {
+  encryptMetaAccessToken,
+  publicMetaSettings,
+  validateMetaPixelId,
+} from "../Services/meta-settings.service";
 
 const DEFAULT_SETTINGS = {
   buttonText: "Commander en paiement à la livraison",
@@ -146,7 +151,7 @@ export async function loader({ request }) {
     });
   }
 
-  const [zones, orders] = await Promise.all([
+  const [zones, orders, storedMetaSettings] = await Promise.all([
     prisma.shippingZone.findMany({
       where: { shop },
       orderBy: { zone: "asc" }
@@ -155,7 +160,8 @@ export async function loader({ request }) {
       where: { shop },
       orderBy: { createdAt: "desc" },
       take: 50
-    })
+    }),
+    prisma.metaTrackingSettings.findUnique({ where: { shop } })
   ]);
 
   const totalRevenueResult = await prisma.codOrder.aggregate({
@@ -179,6 +185,7 @@ export async function loader({ request }) {
     zones,
     orders,
     emailSettings,
+    metaSettings: publicMetaSettings(storedMetaSettings),
     orderStats
   };
 }
@@ -244,6 +251,73 @@ export async function action({ request }) {
       };
     }
 
+    if (actionType === "updateMeta") {
+      const existing = await prisma.metaTrackingSettings.findUnique({
+        where: { shop }
+      });
+      const enabled = formData.get("enabled") === "on";
+      const browserPixelEnabled =
+        formData.get("browserPixelEnabled") === "on";
+      const pixelId = String(formData.get("pixelId") || "").trim();
+      const newAccessToken = String(
+        formData.get("accessToken") || ""
+      ).trim();
+      const clearAccessToken = formData.get("clearAccessToken") === "on";
+      const testEventCode = String(
+        formData.get("testEventCode") || ""
+      ).trim();
+
+      if (pixelId && !validateMetaPixelId(pixelId)) {
+        return {
+          success: false,
+          message: "Le Pixel ID doit contenir uniquement des chiffres."
+        };
+      }
+
+      let accessTokenEncrypted = clearAccessToken
+        ? null
+        : existing?.accessTokenEncrypted || null;
+
+      if (newAccessToken) {
+        accessTokenEncrypted = encryptMetaAccessToken(newAccessToken);
+      }
+
+      if (enabled && (!pixelId || !accessTokenEncrypted)) {
+        return {
+          success: false,
+          message: "Ajoutez le Pixel ID et le token Conversions API avant d’activer Meta."
+        };
+      }
+
+      await prisma.metaTrackingSettings.upsert({
+        where: { shop },
+        update: {
+          enabled,
+          pixelId: pixelId || null,
+          accessTokenEncrypted,
+          browserPixelEnabled,
+          testEventCode: testEventCode || null,
+          lastEventStatus: enabled ? existing?.lastEventStatus : "disabled",
+          lastEventError: enabled ? existing?.lastEventError : null
+        },
+        create: {
+          shop,
+          enabled,
+          pixelId: pixelId || null,
+          accessTokenEncrypted,
+          browserPixelEnabled,
+          testEventCode: testEventCode || null
+        }
+      });
+
+      return {
+        success: true,
+        message: enabled
+          ? "Meta Pixel et Conversions API activés pour cette boutique"
+          : "Suivi Meta désactivé pour cette boutique"
+      };
+    }
+
     if (actionType === "addZone") {
       await prisma.shippingZone.create({
         data: {
@@ -299,7 +373,14 @@ export async function action({ request }) {
 }
 
 export default function PremiumDashboard() {
-  const { settings, zones, orders, emailSettings, orderStats } = useLoaderData();
+  const {
+    settings,
+    zones,
+    orders,
+    emailSettings,
+    metaSettings,
+    orderStats
+  } = useLoaderData();
   const actionData = useActionData();
   const [activeTab, setActiveTab] = useState("dashboard");
   const [previewSettings, setPreviewSettings] = useState(
@@ -320,6 +401,7 @@ export default function PremiumDashboard() {
             { id: "customization", label: "🎨 Form Builder" },
             { id: "shipping", label: "🚚 Livraison" },
             { id: "email", label: "✉️ Notifications" },
+            { id: "meta", label: "📈 Meta Pixel" },
             { id: "orders", label: "📦 Commandes" },
           ].map((item) => (
             <button
@@ -342,6 +424,7 @@ export default function PremiumDashboard() {
             {activeTab === "customization" && "Personnalisation du Formulaire"}
             {activeTab === "shipping" && "Gestion de la Livraison"}
             {activeTab === "email" && "Notifications par Email"}
+            {activeTab === "meta" && "Meta Pixel & Conversions API"}
             {activeTab === "orders" && "Historique des Commandes"}
           </h1>
           <p className="header-subtitle">Application professionnelle pour gérer les commandes COD au maroc.</p>
@@ -360,6 +443,7 @@ export default function PremiumDashboard() {
           {activeTab === "customization" && <CustomizationTab settings={previewSettings} setSettings={setPreviewSettings} />}
           {activeTab === "shipping" && <ShippingTab zones={zones} />}
           {activeTab === "email" && <EmailTab emailSettings={emailSettings} />}
+          {activeTab === "meta" && <MetaTrackingTab metaSettings={metaSettings} />}
           {activeTab === "orders" && <OrdersTab orders={orders} />}
         </div>
       </main>
@@ -920,6 +1004,141 @@ function EmailTab({ emailSettings }) {
           style={{ marginTop: "16px" }}
         >
           💾 Enregistrer
+        </button>
+      </div>
+    </Form>
+  );
+}
+
+function MetaTrackingTab({ metaSettings }) {
+  const settings = metaSettings || {};
+  const lastEventDate = settings.lastEventAt
+    ? new Date(settings.lastEventAt).toLocaleString("fr-FR")
+    : "Aucun événement envoyé";
+
+  return (
+    <Form method="post" className="grid">
+      <input type="hidden" name="_action" value="updateMeta" />
+
+      <div className="card">
+        <h3 className="card-title">📈 Connexion Meta</h3>
+
+        <div className="meta-status-row">
+          <span
+            className={`meta-status-dot ${settings.enabled ? "is-active" : ""}`}
+            aria-hidden="true"
+          />
+          <strong>{settings.enabled ? "Suivi actif" : "Suivi désactivé"}</strong>
+        </div>
+
+        <div className="form-group">
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              name="enabled"
+              defaultChecked={settings.enabled}
+            />
+            Activer les événements Purchase Meta
+          </label>
+        </div>
+
+        <div className="form-group">
+          <label className="label">Meta Pixel ID</label>
+          <input
+            type="text"
+            inputMode="numeric"
+            name="pixelId"
+            defaultValue={settings.pixelId || ""}
+            placeholder="Ex. 123456789012345"
+            className="input"
+            autoComplete="off"
+          />
+          <p className="help-text">
+            Disponible dans Meta Events Manager → Sources de données.
+          </p>
+        </div>
+
+        <div className="form-group">
+          <label className="label">Token Conversions API</label>
+          <input
+            type="password"
+            name="accessToken"
+            placeholder={
+              settings.hasAccessToken
+                ? "Token déjà enregistré — laisser vide pour le conserver"
+                : "Collez le token généré par Meta"
+            }
+            className="input"
+            autoComplete="new-password"
+          />
+          <p className="help-text">
+            Le token est chiffré dans la base de données et n’est jamais envoyé au navigateur.
+          </p>
+        </div>
+
+        {settings.hasAccessToken && (
+          <div className="form-group">
+            <label className="checkbox-label checkbox-danger">
+              <input type="checkbox" name="clearAccessToken" />
+              Supprimer le token enregistré
+            </label>
+          </div>
+        )}
+      </div>
+
+      <div className="card">
+        <h3 className="card-title">⚙️ Options d’envoi</h3>
+
+        <div className="form-group">
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              name="browserPixelEnabled"
+              defaultChecked={settings.browserPixelEnabled !== false}
+            />
+            Envoyer aussi Purchase depuis le navigateur
+          </label>
+          <p className="help-text">
+            Recommandé avec le serveur. Les deux événements utilisent le même Event ID pour la déduplication.
+          </p>
+        </div>
+
+        <div className="form-group">
+          <label className="label">Code Test Event Meta</label>
+          <input
+            type="text"
+            name="testEventCode"
+            defaultValue={settings.testEventCode || ""}
+            placeholder="Optionnel — seulement pendant les tests"
+            className="input"
+            autoComplete="off"
+          />
+          <p className="help-text">
+            Supprimez ce code après le test afin que les commandes soient traitées comme événements de production.
+          </p>
+        </div>
+
+        <div className="meta-delivery-status">
+          <div>
+            <span className="meta-status-label">Dernier statut</span>
+            <strong>{settings.lastEventStatus || "Non testé"}</strong>
+          </div>
+          <div>
+            <span className="meta-status-label">Dernier envoi</span>
+            <strong>{lastEventDate}</strong>
+          </div>
+        </div>
+
+        {settings.lastEventError && (
+          <div className="alert alert-error meta-error-box">
+            Dernière erreur Meta enregistrée. Vérifiez le Pixel ID, le token et le code de test.
+          </div>
+        )}
+      </div>
+
+      <div style={{ gridColumn: "1 / -1" }}>
+        <button type="submit" className="button button-primary">
+          💾 Enregistrer la configuration Meta
         </button>
       </div>
     </Form>

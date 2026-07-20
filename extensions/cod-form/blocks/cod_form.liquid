@@ -1163,18 +1163,198 @@ function setCheckoutContext(context = {}) {
         document.dispatchEvent(new CustomEvent(name, { detail }));
       }
 
+      const TRACKING_STORAGE_KEY = 'alfajr_cod_tracking_v1';
+      const VISITOR_STORAGE_KEY = 'alfajr_cod_visitor_v1';
+
+      function readCookie(name) {
+        const escapedName = String(name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const match = document.cookie.match(new RegExp(`(?:^|;\\s*)${escapedName}=([^;]*)`));
+        return match ? decodeURIComponent(match[1]) : '';
+      }
+
+      function readStoredJson(key) {
+        try {
+          return JSON.parse(window.localStorage.getItem(key) || '{}');
+        } catch (_) {
+          return {};
+        }
+      }
+
+      function writeStoredJson(key, value) {
+        try {
+          window.localStorage.setItem(key, JSON.stringify(value));
+        } catch (_) {
+          // Storage can be unavailable in private browsing; order submission still works.
+        }
+      }
+
+      function getOrCreateVisitorId() {
+        try {
+          const existing = window.localStorage.getItem(VISITOR_STORAGE_KEY);
+          if (existing) return existing;
+          const created = createRequestId();
+          window.localStorage.setItem(VISITOR_STORAGE_KEY, created);
+          return created;
+        } catch (_) {
+          return createRequestId();
+        }
+      }
+
+      function fbcFromClickId(fbclid) {
+        if (!fbclid) return '';
+        return `fb.1.${Math.floor(Date.now() / 1000)}.${fbclid}`;
+      }
+
       function trackingData() {
         const params = new URLSearchParams(location.search);
-        return {
-          utmSource: params.get('utm_source') || '',
-          utmMedium: params.get('utm_medium') || '',
-          utmCampaign: params.get('utm_campaign') || '',
-          utmContent: params.get('utm_content') || '',
-          utmTerm: params.get('utm_term') || '',
-          fbclid: params.get('fbclid') || '',
-          landingPage: location.href.slice(0, 500),
-          referrer: document.referrer.slice(0, 500)
+        const stored = readStoredJson(TRACKING_STORAGE_KEY);
+        const fbclid = params.get('fbclid') || stored.fbclid || '';
+        const fbp = readCookie('_fbp') || stored.fbp || '';
+        const fbc = readCookie('_fbc') || stored.fbc || fbcFromClickId(fbclid);
+
+        const tracking = {
+          utmSource: params.get('utm_source') || stored.utmSource || '',
+          utmMedium: params.get('utm_medium') || stored.utmMedium || '',
+          utmCampaign: params.get('utm_campaign') || stored.utmCampaign || '',
+          utmContent: params.get('utm_content') || stored.utmContent || '',
+          utmTerm: params.get('utm_term') || stored.utmTerm || '',
+          fbclid,
+          fbp,
+          fbc,
+          externalId: stored.externalId || getOrCreateVisitorId(),
+          landingPage: stored.landingPage || location.href.slice(0, 1000),
+          eventSourceUrl: location.href.slice(0, 1000),
+          referrer: stored.referrer || document.referrer.slice(0, 500)
         };
+
+        writeStoredJson(TRACKING_STORAGE_KEY, tracking);
+        return tracking;
+      }
+
+      function analyticsProcessingAllowed() {
+        try {
+          const privacy = window.Shopify?.customerPrivacy;
+          if (typeof privacy?.analyticsProcessingAllowed === 'function') {
+            return privacy.analyticsProcessingAllowed();
+          }
+        } catch (_) {
+          // Shopify privacy API may not be available on every storefront.
+        }
+        return true;
+      }
+
+      function ensureConfiguredMetaPixel(pixelId) {
+        const normalizedPixelId = String(pixelId || '').trim();
+        if (!/^\d{5,30}$/.test(normalizedPixelId)) return false;
+
+        if (typeof window.fbq !== 'function') {
+          const fbq = function () {
+            if (fbq.callMethod) {
+              fbq.callMethod.apply(fbq, arguments);
+            } else {
+              fbq.queue.push(arguments);
+            }
+          };
+
+          if (!window._fbq) window._fbq = fbq;
+          fbq.push = fbq;
+          fbq.loaded = true;
+          fbq.version = '2.0';
+          fbq.queue = [];
+          window.fbq = fbq;
+
+          if (!document.querySelector('script[data-alfajr-meta-pixel]')) {
+            const script = document.createElement('script');
+            script.async = true;
+            script.src = 'https://connect.facebook.net/en_US/fbevents.js';
+            script.dataset.alfajrMetaPixel = 'true';
+            document.head.appendChild(script);
+          }
+        }
+
+        window.__alfajrMetaPixelIds = window.__alfajrMetaPixelIds || {};
+        if (!window.__alfajrMetaPixelIds[normalizedPixelId]) {
+          window.fbq('init', normalizedPixelId);
+          window.__alfajrMetaPixelIds[normalizedPixelId] = true;
+        }
+
+        return true;
+      }
+
+      function publishMetaPurchase(result) {
+        const meta = result?.meta || {};
+        const eventId = meta.eventId || '';
+        if (!eventId) return;
+
+        const firedKey = `alfajr_cod_purchase_${eventId}`;
+        try {
+          if (window.sessionStorage.getItem(firedKey)) return;
+        } catch (_) {
+          // Continue when session storage is unavailable.
+        }
+
+        const purchase = {
+          event_id: eventId,
+          order_id: result.order?.id || '',
+          order_name: result.order?.name || '',
+          value: Number(result.order?.total || 0),
+          currency: result.order?.currency || 'MAD',
+          shipping_fee: Number(result.shippingFee || 0),
+          content_type: 'product',
+          content_ids: Array.isArray(meta.contentIds) ? meta.contentIds : [],
+          contents: Array.isArray(meta.contents) ? meta.contents : []
+        };
+
+        let sentDirectlyToMeta = false;
+
+        try {
+          if (
+            meta.browserEnabled &&
+            meta.pixelId &&
+            analyticsProcessingAllowed() &&
+            ensureConfiguredMetaPixel(meta.pixelId)
+          ) {
+            window.fbq(
+              'trackSingle',
+              String(meta.pixelId),
+              'Purchase',
+              {
+                value: purchase.value,
+                currency: purchase.currency,
+                content_type: purchase.content_type,
+                content_ids: purchase.content_ids,
+                contents: purchase.contents,
+                order_id: purchase.order_id
+              },
+              { eventID: eventId }
+            );
+            sentDirectlyToMeta = true;
+          }
+        } catch (_) {
+          // Browser tracking is best-effort; CAPI is the source of truth.
+        }
+
+        // Preserve compatibility with a Shopify Custom Pixel when automatic
+        // browser tracking is disabled or cannot run.
+        if (!sentDirectlyToMeta) {
+          try {
+            window.Shopify?.analytics?.publish?.('alfajr_cod_purchase', purchase);
+          } catch (_) {
+            // The server-side CAPI event still records the purchase.
+          }
+        }
+
+        window.dataLayer?.push?.({
+          event: 'alfajr_cod_purchase',
+          ...purchase
+        });
+        document.dispatchEvent(new CustomEvent('alfajr_cod_purchase', { detail: purchase }));
+
+        try {
+          window.sessionStorage.setItem(firedKey, '1');
+        } catch (_) {
+          // No-op.
+        }
       }
 
       function openModal(trigger) {
@@ -1379,7 +1559,7 @@ if (!isCartCheckout && !payload.variantId) {
 });
 
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 15000);
+        const timeout = setTimeout(() => controller.abort(), 20000);
 
         let rotateRequestId = false;
 
@@ -1407,6 +1587,7 @@ if (!isCartCheckout && !payload.variantId) {
           if (orderNameOutput) {
             orderNameOutput.textContent = result.order?.name || '';
           }
+          publishMetaPurchase(result);
           emitEvent('cod_order_success', {
             orderName: result.order?.name || '',
             value: result.order?.total || 0,
@@ -1428,6 +1609,7 @@ if (!isCartCheckout && !payload.variantId) {
         }
       });
 
+      trackingData();
       updateSummary();
     })();
   </script>

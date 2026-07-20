@@ -6,6 +6,8 @@ import prisma from "../db.server";
 import { validateCodOrder } from "../lib/validation";
 import { getClientIp, checkCodRateLimits } from "../lib/rateLimiter";
 import { getShippingInfo } from "../Services/shipping.service";
+import { sendMetaPurchase } from "../Services/meta.service";
+import { resolveMetaTrackingConfig } from "../Services/meta-settings.service";
 
 const JSON_HEADERS = {
   "Content-Type": "application/json; charset=utf-8",
@@ -36,6 +38,11 @@ function splitFullName(fullName) {
     firstName: parts.shift() || "Client",
     lastName: parts.join(" ") || "COD",
   };
+}
+
+function shopifyNumericId(gid) {
+  const value = String(gid || "");
+  return value.split("/").filter(Boolean).pop() || "";
 }
 
 function buildOrderNote(data, phone, shippingFee) {
@@ -86,6 +93,16 @@ async function readJsonBody(request) {
   }
 }
 
+async function markIdempotencyFailed(idempotencyKey, response) {
+  if (!idempotencyKey) return;
+  await prisma.idempotentRequest
+    .update({
+      where: { idempotencyKey },
+      data: { status: "failed", response },
+    })
+    .catch(() => {});
+}
+
 export async function loader() {
   return json({ success: false, message: "Method not allowed" }, 405, { Allow: "POST" });
 }
@@ -94,7 +111,7 @@ export async function action({ request }) {
   const logger = createLogger({ endpoint: "api.cod", method: request.method });
   let idempotencyKeyStr;
   let shop;
-  let orderWasCreated = false;
+  let successResponse;
 
   try {
     const proxyContext = await authenticate.public.appProxy(request);
@@ -126,7 +143,7 @@ export async function action({ request }) {
 
     if (alreadyExists) {
       if (alreadyExists.status === "completed") return json(alreadyExists.response, 200);
-      return json({ success: false, message: "Commande en cours." }, 409);
+      return json({ success: false, message: "Commande en cours.", processing: true }, 409);
     }
 
     await prisma.idempotentRequest.create({
@@ -138,15 +155,17 @@ export async function action({ request }) {
       },
     });
 
-    // 1. حساب الشحن الجديد (من الداتا بيز أو فاس 20 درهم)
     const { fee: shippingFee, tag: shippingTag } = await getShippingInfo(data.city, shop);
     const phone = normalizePhone(data.phone);
     const { firstName, lastName } = splitFullName(data.fullName);
 
-    const items = data.items?.length > 0 ? data.items : [{ variantId: data.variantId, quantity: data.quantity || 1 }];
+    const items = data.items?.length > 0
+      ? data.items
+      : [{ variantId: data.variantId, quantity: data.quantity || 1 }];
 
-    // 2. حل مشكل الكليان (Customer): إعطاء إيميل وهمي إذا لم يقم بإدخاله لكي ينشئ Shopify حساب العميل
-    const customerEmail = data.email || `${phone.replace(/\D/g, '')}@cod.al-fajr.ma`;
+    // Shopify requires an email for the draft-order customer in this flow.
+    // The generated fallback address is never sent to Meta.
+    const customerEmail = data.email || `${phone.replace(/\D/g, "")}@cod.al-fajr.ma`;
 
     const customAttributes = [
       { key: "Nom complet", value: data.fullName },
@@ -161,7 +180,6 @@ export async function action({ request }) {
       ...buildTrackingAttributes(data),
     ];
 
-    // 3. إنشاء Draft Order أولا (كي يقوم Shopify بجمع ثمن المنتجات + الشحن)
     const draftMutation = `
       mutation draftOrderCreate($input: DraftOrderInput!) {
         draftOrderCreate(input: $input) {
@@ -200,13 +218,16 @@ export async function action({ request }) {
     const draftJson = await draftResponse.json();
     const draftResult = draftJson?.data?.draftOrderCreate;
 
-    if (draftResult?.userErrors?.length > 0) {
+    if (draftResult?.userErrors?.length > 0 || !draftResult?.draftOrder?.id) {
+      logger.warn("Shopify draft order creation failed", {
+        shop,
+        userErrors: draftResult?.userErrors || [],
+      });
       const errResp = { success: false, message: "Erreur lors de la création de la commande." };
-      await prisma.idempotentRequest.update({ where: { idempotencyKey: idempotencyKeyStr }, data: { status: "failed", response: errResp }});
+      await markIdempotencyFailed(idempotencyKeyStr, errResp);
       return json(errResp, 400);
     }
 
-    // 4. تحويل الـ Draft Order إلى Order حقيقي
     const completeMutation = `
       mutation draftOrderComplete($id: ID!) {
         draftOrderComplete(id: $id, paymentPending: true) {
@@ -215,7 +236,7 @@ export async function action({ request }) {
             order {
               id
               name
-              totalPriceSet { shopMoney { amount } }
+              totalPriceSet { shopMoney { amount currencyCode } }
             }
           }
           userErrors { field message }
@@ -223,57 +244,191 @@ export async function action({ request }) {
       }
     `;
 
-    const completeResponse = await admin.graphql(completeMutation, { variables: { id: draftResult.draftOrder.id } });
+    const completeResponse = await admin.graphql(completeMutation, {
+      variables: { id: draftResult.draftOrder.id },
+    });
     const completeJson = await completeResponse.json();
     const completeResult = completeJson?.data?.draftOrderComplete;
-
-    orderWasCreated = true;
-
     const finalOrder = completeResult?.draftOrder?.order;
-    const finalTotal = finalOrder?.totalPriceSet?.shopMoney?.amount || draftResult.draftOrder.totalPrice;
 
-    const successResponse = {
+    if (completeResult?.userErrors?.length > 0 || !finalOrder?.id) {
+      logger.warn("Shopify draft order completion failed", {
+        shop,
+        draftOrderId: draftResult.draftOrder.id,
+        userErrors: completeResult?.userErrors || [],
+      });
+      const errResp = { success: false, message: "La commande Shopify n’a pas pu être finalisée." };
+      await markIdempotencyFailed(idempotencyKeyStr, errResp);
+      return json(errResp, 400);
+    }
+
+    const finalTotalRaw = finalOrder.totalPriceSet?.shopMoney?.amount || draftResult.draftOrder.totalPrice;
+    const finalTotal = Number(finalTotalRaw);
+    const currency = finalOrder.totalPriceSet?.shopMoney?.currencyCode || "MAD";
+    const orderNumericId = shopifyNumericId(finalOrder.id);
+    const metaEventId = `alfajr_cod_${orderNumericId || idempotencyKeyStr}`;
+    const metaContents = items.map((item) => ({
+      id: String(item.variantId),
+      quantity: Number(item.quantity || 1),
+    }));
+
+    let metaTrackingSettings = null;
+    let metaConfig = {
+      configured: false,
+      browserPixelEnabled: false,
+      source: "disabled",
+    };
+
+    try {
+      metaTrackingSettings = await prisma.metaTrackingSettings.findUnique({
+        where: { shop },
+      });
+      metaConfig = resolveMetaTrackingConfig({
+        shop,
+        settings: metaTrackingSettings,
+      });
+    } catch (error) {
+      logger.error("Could not load merchant Meta settings", error, { shop });
+    }
+
+    successResponse = {
       success: true,
       message: "Votre commande a été enregistrée avec succès.",
       order: {
-        id: finalOrder?.id || draftResult.draftOrder.id,
-        name: finalOrder?.name || draftResult.draftOrder.name,
-        total: Number(finalTotal),
-        currency: "MAD",
+        id: finalOrder.id,
+        name: finalOrder.name,
+        total: Number.isFinite(finalTotal) ? finalTotal : 0,
+        currency,
       },
       shippingFee,
+      meta: {
+        eventId: metaEventId,
+        eventName: "Purchase",
+        serverSent: false,
+        browserEnabled: Boolean(
+          metaConfig.configured && metaConfig.browserPixelEnabled,
+        ),
+        pixelId:
+          metaConfig.configured && metaConfig.browserPixelEnabled
+            ? metaConfig.pixelId
+            : undefined,
+        contentIds: metaContents.map((item) => item.id),
+        contents: metaContents,
+      },
     };
 
-    // 5. تسجيل الطلب في قاعدة البيانات لعرضه في الداشبورد
-    await prisma.$transaction([
-      prisma.codOrder.create({
+    // The Shopify order is already real at this point. Analytics/database
+    // failures are non-critical and must never encourage a duplicate order.
+    try {
+      await prisma.codOrder.create({
         data: {
           shop,
-          shopifyOrderId: finalOrder?.id || draftResult.draftOrder.id,
+          shopifyOrderId: finalOrder.id,
           customerName: data.fullName,
           customerPhone: phone,
           city: data.city,
           shippingFee,
-          total: Number(finalTotal),
+          total: successResponse.order.total,
           status: "pending",
         },
-      }),
-      prisma.idempotentRequest.update({
-        where: { idempotencyKey: idempotencyKeyStr },
-        data: { status: "completed", response: successResponse },
-      }),
-    ]);
+      });
+    } catch (error) {
+      logger.error("Could not save COD order in local dashboard", error, {
+        shop,
+        shopifyOrderId: finalOrder.id,
+      });
+    }
 
-    return json(successResponse, 200);
+    const metaResult = await sendMetaPurchase({
+      eventId: metaEventId,
+      orderId: finalOrder.id,
+      value: successResponse.order.total,
+      currency,
+      items: metaContents,
+      phone,
+      email: data.email || undefined,
+      firstName,
+      lastName,
+      city: data.city,
+      countryCode: "ma",
+      externalId: data.externalId || idempotencyKeyStr,
+      clientIp,
+      userAgent: request.headers.get("user-agent") || undefined,
+      fbp: data.fbp || undefined,
+      fbc: data.fbc || undefined,
+      eventSourceUrl: data.eventSourceUrl || data.landingPage || `https://${shop}`,
+    }, { config: metaConfig });
 
-  } catch (error) {
-    logger.error("API Error", { message: error.message });
-    if (!orderWasCreated && idempotencyKeyStr) {
+    successResponse.meta.serverSent = metaResult.sent;
+    successResponse.meta.serverStatus = metaResult.sent
+      ? "sent"
+      : metaResult.reason || "not_sent";
+
+    if (metaTrackingSettings?.enabled) {
+      const lastEventError = metaResult.sent
+        ? null
+        : JSON.stringify(metaResult.error || { reason: metaResult.reason }).slice(0, 2000);
+
+      await prisma.metaTrackingSettings
+        .update({
+          where: { shop },
+          data: {
+            lastEventStatus: metaResult.sent ? "sent" : metaResult.reason || "failed",
+            lastEventAt: new Date(),
+            lastEventError,
+          },
+        })
+        .catch((error) => {
+          logger.error("Could not save Meta delivery status", error, { shop });
+        });
+    }
+
+    if (!metaResult.sent) {
+      logger.warn("Meta Purchase event was not sent", {
+        shop,
+        shopifyOrderId: finalOrder.id,
+        eventId: metaEventId,
+        configured: metaResult.configured,
+        reason: metaResult.reason,
+        error: metaResult.error,
+      });
+    } else {
+      logger.info("Meta Purchase event sent", {
+        shop,
+        shopifyOrderId: finalOrder.id,
+        eventId: metaEventId,
+        attempts: metaResult.attempts,
+      });
+    }
+
+    try {
       await prisma.idempotentRequest.update({
         where: { idempotencyKey: idempotencyKeyStr },
-        data: { status: "failed", response: { success: false, message: "Erreur serveur." } }
-      }).catch(() => {});
+        data: { status: "completed", response: successResponse },
+      });
+    } catch (error) {
+      logger.error("Could not finalize idempotency record", error, {
+        shop,
+        shopifyOrderId: finalOrder.id,
+        idempotencyKey: idempotencyKeyStr,
+      });
     }
-    return json({ success: false, message: "Erreur serveur." }, 500);
+
+    return json(successResponse, 200);
+  } catch (error) {
+    logger.error("API Error", error, { shop, idempotencyKey: idempotencyKeyStr });
+
+    // Once Shopify has returned a real order, never ask the buyer to submit it again.
+    if (successResponse?.success) {
+      return json(successResponse, 200);
+    }
+
+    const status = Number(error?.status) || 500;
+    const errResp = {
+      success: false,
+      message: status === 413 ? "La requête est trop volumineuse." : "Erreur serveur.",
+    };
+    await markIdempotencyFailed(idempotencyKeyStr, errResp);
+    return json(errResp, status);
   }
 }

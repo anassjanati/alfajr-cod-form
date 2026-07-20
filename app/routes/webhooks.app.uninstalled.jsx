@@ -14,9 +14,12 @@ export const action = async ({ request }) => {
       return new Response(JSON.stringify({ ok: true }), { status: 200 });
     }
 
-    await db.session.deleteMany({ where: { shop } });
+    await db.$transaction([
+      db.metaTrackingSettings.deleteMany({ where: { shop } }),
+      db.session.deleteMany({ where: { shop } }),
+    ]);
 
-    logger.info("Sessions deleted for uninstalled shop");
+    logger.info("Sessions and encrypted Meta credentials deleted for uninstalled shop");
 
     return new Response(JSON.stringify({ ok: true }), { status: 200 });
   } catch (error) {

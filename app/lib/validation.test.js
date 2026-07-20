@@ -110,10 +110,15 @@ describe("COD order validation", () => {
       utmSource: "facebook",
       utmCampaign: "notebook-july",
       fbclid: "example-click-id",
+      fbp: "fb.1.1234567890.123456789",
+      fbc: "fb.1.1234567890.example-click-id",
+      externalId: "visitor-123",
       landingPage: "https://al-fajr.ma/products/notebook",
+      eventSourceUrl: "https://al-fajr.ma/products/notebook?utm_source=facebook",
     });
 
     expect(result.success).toBe(true);
     expect(result.data.utmSource).toBe("facebook");
+    expect(result.data.fbp).toBe("fb.1.1234567890.123456789");
   });
 });
