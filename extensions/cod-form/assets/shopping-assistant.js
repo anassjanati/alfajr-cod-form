@@ -51,9 +51,11 @@
       if (this.pending.length && /^(ok|oui|yes|نعم|واخا|واخا زيدهم|زيدهم|wakha|ah)$/i.test(message)) {
         this.say(message, true); await this.addPending(); return;
       }
-      if (!this.consent) {
-        if (!window.confirm(this.labels.consent)) { this.input.value = message; return; }
-        this.consent = true;
+      if (!this.querySelector('.af-consent').checked) {
+        this.input.value = message;
+        this.say(this.labels.consent);
+        this.querySelector('.af-consent').focus();
+        return;
       }
       this.say(message, true);
       this.busy = true; this.form.querySelector('button').disabled = true;

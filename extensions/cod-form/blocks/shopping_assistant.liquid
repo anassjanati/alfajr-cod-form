@@ -2,7 +2,7 @@
   <button class="af-launch" type="button" aria-expanded="false" aria-controls="af-chat-panel">{{ 'assistant.open' | t }}</button>
   <section id="af-chat-panel" class="af-panel" aria-label="{{ 'assistant.title' | t }}" hidden>
     <header><div><strong>{{ 'assistant.title' | t }}</strong><small>{{ 'assistant.subtitle' | t }}</small></div><button class="af-close" type="button" aria-label="{{ 'assistant.close' | t }}">×</button></header>
-    <div class="af-intro"><p>{{ 'assistant.welcome' | t }}</p><p class="af-privacy">{{ 'assistant.privacy' | t }}</p></div>
+    <div class="af-intro"><p>{{ 'assistant.welcome' | t }}</p><p class="af-privacy">{{ 'assistant.privacy' | t }}</p><label class="af-consent-label"><input type="checkbox" class="af-consent">{{ 'assistant.consent_label' | t }}</label></div>
     <div class="af-log" role="log" aria-live="polite" aria-relevant="additions" tabindex="0"></div>
     <div class="af-confirm" hidden><p></p><button type="button" class="af-yes">{{ 'assistant.confirm' | t }}</button><button type="button" class="af-no">{{ 'assistant.cancel' | t }}</button></div>
     <form class="af-form"><label class="af-sr" for="af-message">{{ 'assistant.placeholder' | t }}</label><input id="af-message" name="message" maxlength="600" autocomplete="off" placeholder="{{ 'assistant.placeholder' | t }}" required><button type="submit" aria-label="{{ 'assistant.send' | t }}">➜</button></form>

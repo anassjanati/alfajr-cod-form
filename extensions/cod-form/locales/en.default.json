@@ -25,7 +25,8 @@
     "selected": "Sélectionné",
     "cancelled": "Sélection annulée.",
     "view": "Voir le produit",
-    "consent": "Cette beta envoie tes messages à Google Gemini, qui peut les utiliser pour améliorer ses produits. Ne partage pas de données personnelles. Continuer ?"
+    "consent_label": "J’accepte l’envoi de mes messages à Google Gemini, qui peut les utiliser pour améliorer ses produits.",
+    "consent": "Coche la case au-dessus pour discuter avec l’assistant. Ne partage pas de données personnelles."
   },
   "ratings": {
     "stars": {

@@ -88,7 +88,14 @@ describe('real widget with simulated Shopify responses', () => {
     expect(widget.log.querySelector('img')).toBeNull();
   });
   it('does not send chat text when Gemini notice is declined', async () => {
-    const { widget, w, fetcher } = setup(); w.confirm = () => false;
+    const { widget, fetcher } = setup();
     widget.input.value = 'stylo'; await widget.send(); expect(fetcher).not.toHaveBeenCalled();
+  });
+  it('sends a message after inline consent without opening a browser dialog', async () => {
+    const { widget, w, fetcher } = setup();
+    widget.querySelector('.af-consent').checked = true;
+    widget.input.value = 'stylo'; await widget.send();
+    expect(fetcher.mock.calls.some(([url]) => url.includes('/api/assistant'))).toBe(true);
+    expect(w.confirm).not.toHaveBeenCalled();
   });
 });
