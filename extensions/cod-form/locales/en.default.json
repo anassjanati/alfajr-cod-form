@@ -1,4 +1,32 @@
 {
+  "assistant": {
+    "open": "Besoin d’aide ?",
+    "title": "Assistant Al Fajr",
+    "subtitle": "Conseils shopping · Beta",
+    "close": "Fermer",
+    "welcome": "Salam ! Chno kat9elleb 3lih ? Décris ton besoin et ton budget.",
+    "privacy": "Beta avec Gemini. Évite toute donnée personnelle : nom, téléphone, adresse ou commande.",
+    "placeholder": "Un produit, un besoin…",
+    "send": "Envoyer",
+    "search": "Rechercher des produits",
+    "cart": "Voir mon panier",
+    "confirm": "Oui, ajouter",
+    "cancel": "Annuler",
+    "thinking": "Je cherche dans le catalogue…",
+    "unavailable": "Assistant temporairement indisponible. La recherche et le panier restent accessibles ci-dessous.",
+    "select": "Sélectionner",
+    "choose": "Choisir une variante",
+    "quantity": "Quantité",
+    "confirm_question": "Wach nzidhom lik l panier ? Confirme cette sélection :",
+    "added": "Ajout confirmé ! Retrouve tes articles dans « Voir mon panier ».",
+    "failed": "Ajout non confirmé. Vérifie ton panier avant de réessayer pour éviter un doublon.",
+    "changed": "Le prix a changé. Vérifie le nouveau total et confirme à nouveau.",
+    "stock": "Cette sélection n’est plus disponible. Consulte la fiche produit.",
+    "selected": "Sélectionné",
+    "cancelled": "Sélection annulée.",
+    "view": "Voir le produit",
+    "consent": "Cette beta envoie tes messages à Google Gemini, qui peut les utiliser pour améliorer ses produits. Ne partage pas de données personnelles. Continuer ?"
+  },
   "ratings": {
     "stars": {
       "label": "Ratings"

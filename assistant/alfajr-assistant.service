@@ -1,0 +1,26 @@
+[Unit]
+Description=Al Fajr shopping assistant beta
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=alfajr-assistant
+Group=alfajr-assistant
+WorkingDirectory=/opt/alfajr-assistant
+EnvironmentFile=/etc/alfajr-assistant.env
+ExecStart=/usr/bin/node --max-old-space-size=192 assistant/server.mjs
+Restart=on-failure
+RestartSec=5
+MemoryMax=320M
+CPUQuota=40%
+TasksMax=32
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+UMask=0077
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
