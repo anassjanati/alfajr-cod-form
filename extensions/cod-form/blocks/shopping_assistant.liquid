@@ -2,14 +2,14 @@
   <button class="af-launch" type="button" aria-expanded="false" aria-controls="af-chat-panel">{{ 'assistant.open' | t }}</button>
   <section id="af-chat-panel" class="af-panel" aria-label="{{ 'assistant.title' | t }}" hidden>
     <header><div><strong>{{ 'assistant.title' | t }}</strong><small>{{ 'assistant.subtitle' | t }}</small></div><button class="af-close" type="button" aria-label="{{ 'assistant.close' | t }}">×</button></header>
-    <div class="af-intro"><p>{{ 'assistant.welcome' | t }}</p><p class="af-privacy">{{ 'assistant.privacy' | t }}</p><label class="af-consent-label"><input type="checkbox" class="af-consent">{{ 'assistant.consent_label' | t }}</label></div>
+    <div class="af-intro"><p>{{ 'assistant.welcome' | t }}</p><details class="af-privacy"><summary>{{ 'assistant.notice' | t }}</summary><p>{{ 'assistant.privacy' | t }}</p></details></div>
     <div class="af-log" role="log" aria-live="polite" aria-relevant="additions" tabindex="0"></div>
     <div class="af-confirm" hidden><p></p><button type="button" class="af-yes">{{ 'assistant.confirm' | t }}</button><button type="button" class="af-no">{{ 'assistant.cancel' | t }}</button></div>
     <form class="af-form"><label class="af-sr" for="af-message">{{ 'assistant.placeholder' | t }}</label><input id="af-message" name="message" maxlength="600" autocomplete="off" placeholder="{{ 'assistant.placeholder' | t }}" required><button type="submit" aria-label="{{ 'assistant.send' | t }}">➜</button></form>
     <footer><a href="{{ routes.search_url }}?type=product">{{ 'assistant.search' | t }}</a><a href="{{ routes.cart_url }}">{{ 'assistant.cart' | t }}</a></footer>
   </section>
   <script type="application/json" class="af-labels">{
-    "thinking": {{ 'assistant.thinking' | t | json }}, "unavailable": {{ 'assistant.unavailable' | t | json }},
+    "thinking": {{ 'assistant.thinking' | t | json }}, "unavailable": {{ 'assistant.unavailable' | t | json }}, "sent": {{ 'assistant.sent' | t | json }}, "received": {{ 'assistant.received' | t | json }}, "searchReply": {{ 'assistant.search_reply' | t | json }},
     "select": {{ 'assistant.select' | t | json }}, "choose": {{ 'assistant.choose' | t | json }},
     "quantity": {{ 'assistant.quantity' | t | json }}, "confirmQuestion": {{ 'assistant.confirm_question' | t | json }},
     "added": {{ 'assistant.added' | t | json }}, "failed": {{ 'assistant.failed' | t | json }},
@@ -21,7 +21,7 @@
 
 {% schema %}
 {
-  "name": "Al Fajr Assistant Beta",
+  "name": "Assistant Al Fajr",
   "target": "body",
   "javascript": "shopping-assistant.js",
   "stylesheet": "shopping-assistant.css",

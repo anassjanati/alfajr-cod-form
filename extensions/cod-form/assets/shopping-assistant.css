@@ -12,3 +12,5 @@ alfajr-assistant .af-confirm{padding:10px 14px;background:#fff7df;max-height:160
 alfajr-assistant .af-form{display:flex;gap:7px;padding:10px 14px;border-top:1px solid #e5ebe6}alfajr-assistant .af-form input{min-width:0;flex:1;border:1px solid #bbcdbf;border-radius:12px;padding:11px;background:#fff;color:#173b31}alfajr-assistant footer{display:flex;justify-content:space-between;padding:0 16px 12px;font-size:12px}
 alfajr-assistant .af-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
 @media(max-width:480px){alfajr-assistant{right:12px;bottom:85px}alfajr-assistant .af-panel{width:calc(100vw - 24px);height:min(590px,72dvh);bottom:54px}alfajr-assistant .af-intro{padding:8px 12px}}
+
+alfajr-assistant .af-receipt{display:block;text-align:right;color:#66796f;font-size:11px;margin:-6px 8px 12px}alfajr-assistant .af-privacy summary{cursor:pointer}alfajr-assistant .af-typing{animation:af-pulse 1.2s ease-in-out infinite} @keyframes af-pulse{50%{opacity:.5}} @media(prefers-reduced-motion:reduce){alfajr-assistant .af-typing{animation:none}}

@@ -87,13 +87,20 @@ describe('real widget with simulated Shopify responses', () => {
     const { widget } = setup(); widget.say('<img src=x onerror=alert(1)>');
     expect(widget.log.querySelector('img')).toBeNull();
   });
-  it('does not send chat text when Gemini notice is declined', async () => {
+  it('shows typing only while a reply is pending', async () => {
     const { widget, fetcher } = setup();
-    widget.input.value = 'stylo'; await widget.send(); expect(fetcher).not.toHaveBeenCalled();
+    let resolve;
+    fetcher.mockImplementationOnce(() => new Promise(r => { resolve = r; }));
+    widget.input.value = 'stylo'; const request = widget.send();
+    expect(widget.querySelector('.af-typing').textContent).toBe(labels.assistant.thinking);
+    expect(widget.querySelector('.af-receipt').textContent).toBe(labels.assistant.sent);
+    resolve(Response.json({reply:'Bonjour',products:[]})); await request;
+    expect(widget.querySelector('.af-typing')).toBeNull();
+    expect(widget.querySelector('.af-receipt').textContent).toBe(labels.assistant.received);
   });
   it('sends a message after inline consent without opening a browser dialog', async () => {
     const { widget, w, fetcher } = setup();
-    widget.querySelector('.af-consent').checked = true;
+    expect(widget.querySelector('.af-consent')).toBeNull();
     widget.input.value = 'stylo'; await widget.send();
     expect(fetcher.mock.calls.some(([url]) => url.includes('/api/assistant'))).toBe(true);
     expect(w.confirm).not.toHaveBeenCalled();

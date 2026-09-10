@@ -51,23 +51,22 @@
       if (this.pending.length && /^(ok|oui|yes|نعم|واخا|واخا زيدهم|زيدهم|wakha|ah)$/i.test(message)) {
         this.say(message, true); await this.addPending(); return;
       }
-      if (!this.querySelector('.af-consent').checked) {
-        this.input.value = message;
-        this.say(this.labels.consent);
-        this.querySelector('.af-consent').focus();
-        return;
-      }
       this.say(message, true);
+      const receipt = document.createElement('small');
+      receipt.className = 'af-receipt'; receipt.textContent = this.labels.sent;
+      this.log.append(receipt);
       this.busy = true; this.form.querySelector('button').disabled = true;
       const waiting = this.say(this.labels.thinking);
+      waiting.classList.add('af-typing');
       try {
         const data = await this.json(this.dataset.endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message, history: this.history.slice(-6) }) });
-        waiting.textContent = data.reply;
+        receipt.textContent = this.labels.received;
+        waiting.textContent = data.mode === 'search' ? this.labels.searchReply : data.reply;
         this.history.push({ role: 'user', text: message }, { role: 'model', text: data.reply.slice(0, 1200) });
         this.history = this.history.slice(-6);
         for (const product of data.products || []) this.card(product);
       } catch { waiting.textContent = this.labels.unavailable; }
-      finally { this.busy = false; this.form.querySelector('button').disabled = false; this.log.scrollTop = this.log.scrollHeight; }
+      finally { waiting.classList.remove('af-typing'); this.busy = false; this.form.querySelector('button').disabled = false; this.log.scrollTop = this.log.scrollHeight; }
     }
     card(product) {
       if (!/^[a-z0-9-]+$/.test(product.handle)) return;
