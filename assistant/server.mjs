@@ -1,11 +1,13 @@
 import http from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
-import { createAssistant, createBudget, createCatalog, inputSchema } from './core.mjs';
+import { createAssistant, createBudget, createCatalog, requestSchema } from './core.mjs';
+import { createMetrics } from './metrics.mjs';
 
 const token = process.env.ASSISTANT_INTERNAL_TOKEN;
 if (!token || token.length < 32) throw new Error('ASSISTANT_INTERNAL_TOKEN must have at least 32 characters');
 const number = (key, value) => Math.max(1, Number.parseInt(process.env[key] || value, 10) || value);
 const catalog = createCatalog();
+const metrics = await createMetrics(process.env.ASSISTANT_METRICS_PATH || '/var/lib/alfajr-assistant/metrics.json');
 const assistant = createAssistant({
   catalog, budget: createBudget({ concurrent: number('ASSISTANT_CONCURRENCY', 2), perMinute: number('GEMINI_REQUESTS_PER_MINUTE', 4), perDay: number('GEMINI_REQUESTS_PER_DAY', 80) }),
   apiKey: process.env.GEMINI_API_KEY, model: process.env.GEMINI_MODEL,
@@ -16,6 +18,7 @@ const server = http.createServer(async (req, res) => {
   const supplied = Buffer.from(req.headers.authorization || '');
   const expected = Buffer.from(`Bearer ${token}`);
   if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) return reply(401, { error: 'Unauthorized' });
+  if (req.method === 'GET' && req.url === '/stats') return reply(200, metrics.snapshot());
   if (req.method !== 'POST' || req.url !== '/chat') return reply(404, { error: 'Not found' });
   if (active >= 16) return reply(503, { error: 'Busy' });
   active++;
@@ -27,9 +30,16 @@ const server = http.createServer(async (req, res) => {
       if (bytes > 12000) { reply(413, { error: 'Too large' }); req.destroy(); return; }
       chunks.push(chunk);
     }
-    const parsed = inputSchema.safeParse(JSON.parse(Buffer.concat(chunks).toString()));
+    const parsed = requestSchema.safeParse(JSON.parse(Buffer.concat(chunks).toString()));
     if (!parsed.success) return reply(400, { error: 'Invalid input' });
-    reply(200, await assistant(parsed.data));
+    if (parsed.data.event) {
+      const products = (await catalog.products()).filter(p => parsed.data.productIds.includes(String(p.id)));
+      if (products.length !== new Set(parsed.data.productIds).size) return reply(400, { error: 'Unknown product' });
+      metrics.added(parsed.data, products); return reply(200, { ok: true });
+    }
+    const result = await assistant(parsed.data);
+    metrics.message(parsed.data, result);
+    reply(200, result);
   } catch { if (!res.headersSent) reply(400, { error: 'Invalid request' }); }
   finally { active--; }
 });
@@ -39,4 +49,4 @@ server.listen(number('ASSISTANT_PORT', 3101), '127.0.0.1', () => console.log('Al
 catalog.products().catch(() => console.warn('Assistant catalog warmup unavailable'));
 const refresh = setInterval(() => catalog.products().catch(() => {}), 300000);
 refresh.unref();
-process.on('SIGTERM', () => { clearInterval(refresh); server.close(); });
+process.on('SIGTERM', () => { clearInterval(refresh); server.close(() => metrics.flush().finally(() => process.exit())); });

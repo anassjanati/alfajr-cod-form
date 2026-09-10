@@ -2,7 +2,7 @@ import { Buffer } from 'node:buffer';
 import process from 'node:process';
 import { authenticate } from '../shopify.server';
 import { checkRateLimit, getClientIp } from '../lib/rateLimiter';
-import { inputSchema } from '../../assistant/core.mjs';
+import { requestSchema } from '../../assistant/core.mjs';
 
 const json = (body, status = 200) => Response.json(body, { status, headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
 let inFlight = 0;
@@ -30,7 +30,7 @@ export async function action({ request }) {
       chunks.push(Buffer.from(value));
     }
     let input;
-    try { input = inputSchema.parse(JSON.parse(Buffer.concat(chunks).toString())); }
+    try { input = requestSchema.parse(JSON.parse(Buffer.concat(chunks).toString())); }
     catch { return json({ error: 'Invalid input' }, 400); }
     if (!process.env.ASSISTANT_INTERNAL_TOKEN) return json({ error: 'Not configured' }, 503);
     const response = await fetch('http://127.0.0.1:3101/chat', {

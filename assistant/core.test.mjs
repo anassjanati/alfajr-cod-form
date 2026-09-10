@@ -65,6 +65,31 @@ describe('traffic protection', () => {
 
 describe('Gemini integration with simulated responses', () => {
   const catalog = { products: async () => products, collections: async () => [] };
+  it('answers policies without a catalogue or Gemini and cites the merchant page', async () => {
+    const fetcher = vi.fn();
+    const assistant = createAssistant({ catalog: {}, fetcher, budget: createBudget() });
+    const result = await assistant({ message: 'Livraison et retour ?' });
+    expect(result.reply).toContain('35 DH'); expect(result.reply).toContain('7 jours');
+    expect(result.reply).toContain('https://al-fajr.ma/pages/politique-retour');
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+  it('resolves current page from the real catalogue, ignoring invented IDs', async () => {
+    const assistant = createAssistant({ catalog, budget: createBudget() });
+    const result = await assistant({ message: 'Est-ce disponible en bleu ?', context: { productHandle: 'product-1', productIds: ['999'] } });
+    expect(result.products.map(p => p.id)).toEqual(['1']);
+    expect(inputSchema.safeParse({ message: 'test', context: { productHandle: '../../secret', description: 'fake' } }).success).toBe(false);
+  });
+  it('compares only catalogue products and preserves their actual descriptions', async () => {
+    const assistant = createAssistant({ catalog, budget: createBudget() });
+    const result = await assistant({ message: 'compare', context: { intent: 'compare', productIds: ['1', '3', '999'] } });
+    expect(result.comparison.map(p => p.id)).toEqual(['1', '3']);
+    expect(result.products).toHaveLength(2);
+  });
+  it('does not invent printer compatibility for complementary products', async () => {
+    const assistant = createAssistant({ catalog: { products: async () => [product(10, 'Imprimante HP')] }, budget: createBudget() });
+    const result = await assistant({ message: 'complements', context: { intent: 'complements', productHandle: 'product-10' } });
+    expect(result.products).toEqual([]); expect(result.reply).toContain('https://wa.me/');
+  });
   it('grounds product cards and never returns model actions', async () => {
     const fetcher = vi.fn().mockResolvedValueOnce(geminiResponse({ terms: 'stylo', collection: '', maxPrice: 30 }))
       .mockResolvedValueOnce(geminiResponse({ reply: 'Voici un stylo.', productIds: ['1', '999'], addToCart: true }));

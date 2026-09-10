@@ -19,6 +19,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
+StateDirectory=alfajr-assistant
 UMask=0077
 TimeoutStopSec=30
 

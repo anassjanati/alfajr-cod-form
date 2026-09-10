@@ -16,9 +16,10 @@ const template = readFileSync(new URL('blocks/shopping_assistant.liquid', base),
 const windows = [];
 afterEach(() => { windows.splice(0).forEach(w => w.close()); });
 
-function setup() {
+function setup(saved) {
   const dom = new JSDOM(template, { url: 'https://al-fajr.ma/', runScripts: 'outside-only' });
   const w = dom.window; windows.push(w);
+  if (saved) w.sessionStorage.setItem('alfajr-chat-v2', saved);
   let price = 2000, available = true, failWrite = false;
   const fetcher = vi.fn(async (url, options) => {
     if (url === '/cart.js') return Response.json({ currency: 'MAD' });
@@ -39,10 +40,24 @@ function setup() {
     await vi.waitFor(() => expect(widget.querySelector('.af-controls button').disabled).toBe(false));
     widget.querySelector('.af-controls button').click();
   }
-  return { w, widget, fetcher, writes, choose, setPrice: v => { price = v; }, soldOut: () => { available = false; }, failWrite: () => { failWrite = true; } };
+  const extras = async () => { w.eval(readFileSync(new URL('assets/shopping-assistant-extras.js', base), 'utf8')); await vi.waitFor(() => expect(widget.extrasReady).toBe(true)); widget.dataset.product = ''; };
+  return { w, widget, fetcher, writes, choose, extras, setPrice: v => { price = v; }, soldOut: () => { available = false; }, failWrite: () => { failWrite = true; } };
 }
 
 describe('real widget with simulated Shopify responses', () => {
+  it('restores chat on another page without restoring pending cart writes', async () => {
+    const first = setup(); await first.extras(); first.widget.input.value = 'stylo'; await first.widget.send();
+    const saved = first.w.sessionStorage.getItem('alfajr-chat-v2'); expect(saved).toContain('stylo');
+    const next = setup(saved); await next.extras();
+    expect(next.widget.history).toHaveLength(2); expect(next.widget.log.textContent).toContain('stylo');
+    expect(next.widget.pending).toHaveLength(0); expect(next.writes()).toHaveLength(0);
+  });
+  it('expires old sessions and renders only approved contact/policy links', async () => {
+    const state = setup(JSON.stringify({ expires: 1, messages: [{text:'expired',user:true}], history: [] })); await state.extras();
+    expect(state.widget.log.textContent).not.toContain('expired');
+    const node = state.widget.say(''); state.widget.renderReply(node, 'https://evil.example https://al-fajr.ma/pages/livraison');
+    expect(node.querySelectorAll('a')).toHaveLength(1); expect(node.querySelector('a').href).toContain('/pages/livraison');
+  });
   it('opens, focuses the composer and closes on Escape', () => {
     const { widget, w } = setup(); widget.launch.click();
     expect(widget.panel.hidden).toBe(false); expect(w.document.activeElement).toBe(widget.input);
