@@ -2,7 +2,7 @@ import { expect, it } from 'vitest';
 import { rankProducts, createAssistant, createBudget } from './core.mjs';
 import { explicitPrice, searchQuery } from './search.mjs';
 const p = (id,title,price='10',available=true,body_html='') => ({id,title,handle:`p-${id}`,body_html,variants:[{id:id+100,title:'Default',price,available}]});
-const products=[p(1,'Stylo bleu'),p(2,'Cahier A4'),p(3,'Rame papier imprimante A4'),p(4,'Trousse', '10',true,'Rangement stylo bleu'),p(5,'Stylo luxe','100'),p(6,'Stylo rouge','5',false)];
+const products=[p(1,'Stylo bleu'),p(2,'Cahier A4'),p(3,'Rame papier imprimante A4'),p(4,'Trousse', '10',true,'Rangement stylo bleu'),p(5,'Stylo luxe','100'),p(6,'Stylo rouge','5',false),p(7,'Protège cahier A4'),p(8,'Stylo correcteur'),p(9,'Papier autocollant imprimante')];
 it('recognizes Darija aliases and avoids description-only category matches',()=>{
   for(const term of ['bghit stilo','بغيت ستيلو','3afak 9alam']) expect(rankProducts(products,term).map(p=>p.id)).toEqual([1,5]);
   expect(rankProducts(products,'بغيت دفتر')[0].id).toBe(2);

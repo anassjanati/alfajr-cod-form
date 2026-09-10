@@ -25,7 +25,9 @@ export function rankProducts(products, terms, maxPrice = null) {
   return products.map(p => {
     const haystack = normalize(`${p.title} ${p.product_type} ${p.tags} ${String(p.body_html || '').replace(/<[^>]*>/g, ' ').slice(0, 1600)}`);
     const title = normalize(p.title);
-    const categoryMatches = !family || family.title.test(title);
+    const accessory = family?.key === 'cahier' && /protege|couverture/.test(title) || family?.key === 'stylo' && /correcteur|recharge|porte.stylo/.test(title);
+    const printerPaper = family?.key === 'papier' && words.includes('imprimante');
+    const categoryMatches = (!family || family.title.test(title)) && !accessory && (!printerPaper || /\brame\b/.test(title));
     const score = !categoryMatches ? 0 : words.reduce((n, w) => n + (title.includes(w) ? 4 : haystack.includes(w) ? 1 : 0), 0);
     const affordable = p.variants.some(v => v.available && (maxPrice === null || Number(v.price) <= maxPrice));
     return { p, score, affordable };
