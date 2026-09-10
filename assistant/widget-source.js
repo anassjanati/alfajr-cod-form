@@ -73,12 +73,14 @@ customElements.define('alfajr-assistant', class extends HTMLElement {
     try {
       const data = await this.json(this.dataset.endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...(this.conversationId ? { conversationId: this.conversationId } : {}), message, history: this.history.slice(-6), ...(this.buildContext ? { context: this.buildContext(intent) } : {}) }) });
       receipt.textContent = this.labels.received;
-      this.renderReply(waiting, data.mode === 'search' ? this.labels.searchReply : data.reply);
+      if (data.turnId) waiting.dataset.turnId = data.turnId;
+      this.renderReply(waiting, data.reply);
       this.history.push({ role: 'user', text: message }, { role: 'model', text: data.reply.slice(0, 1200) });
       this.history = this.history.slice(-6);
       this.lastProducts = (data.products || []).map(p => ({ id: p.id, title: p.title, handle: p.handle, image: p.image }));
       if (data.comparison) this.renderComparison?.(data.comparison);
       for (const product of data.products || []) this.card(product);
+      this.feedbackControl?.(waiting);
     } catch { waiting.textContent = this.labels.unavailable; }
     finally { waiting.classList.remove('af-typing'); this.busy = false; this.form.querySelector('button').disabled = false; this.log.scrollTop = this.log.scrollHeight; this.saveState?.(); }
   }

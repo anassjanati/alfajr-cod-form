@@ -24,3 +24,17 @@ it('groups turns, persists only redacted text, paginates and expires without new
     expect(JSON.parse(await readFile(path, 'utf8')).rows).toEqual([]);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
+
+it('binds feedback to the correct conversation and persists replacement votes', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'alfajr-feedback-'));
+  try {
+    const path=join(dir,'data.json'), store=await createConversations(path);
+    const turnId=store.record({conversationId:'one',message:'stylo'}, {reply:'Voici',products:[]});
+    expect(await store.feedback({conversationId:'other',turnId,rating:'up'})).toBe(false);
+    expect(await store.feedback({conversationId:'one',turnId,rating:'up'})).toBe(true);
+    expect(await store.feedback({conversationId:'one',turnId,rating:'down'})).toBe(true);
+    const restored=await createConversations(path);
+    expect(restored.snapshot().rows[0].turns).toHaveLength(1);
+    expect(restored.snapshot().rows[0].turns[0].rating).toBe('down');
+  } finally { await rm(dir,{recursive:true,force:true}); }
+});

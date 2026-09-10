@@ -24,7 +24,7 @@ export default function Conversations() {
       {row.turns.map((turn, i) => <section key={i} style={{ marginTop: 20 }}>
         <small>{date(turn.at)}</small>
         <div style={{ padding: 14, borderRadius: 12, background: '#fff1e2', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}><strong>Client</strong><p>{turn.question}</p></div>
-        <div style={{ padding: 14, marginTop: 8, borderRadius: 12, background: '#eaf2ff', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}><strong>Assistant</strong><p>{turn.answer}</p>
+        <div style={{ padding: 14, marginTop: 8, borderRadius: 12, background: '#eaf2ff', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}><strong>Assistant</strong><p>{turn.answer}</p><small>{turn.rating === 'up' ? '👍 Réponse utile' : turn.rating === 'down' ? '👎 Réponse peu utile' : 'Pas encore évaluée'}</small>
           {!!turn.products.length && <ul>{turn.products.map((p, j) => <li key={j}>{/^[a-z0-9-]+$/.test(p.handle) ? <a href={`https://al-fajr.ma/products/${p.handle}`} target="_blank" rel="noopener noreferrer">{p.title}</a> : p.title}</li>)}</ul>}
         </div>
       </section>)}

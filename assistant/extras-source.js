@@ -6,10 +6,30 @@
       if (!w.ready || w.extrasReady) continue;
       w.conversationId = crypto.randomUUID();
       w.extrasReady = true; w.compareIds = new Set();
+      w.feedbackControl = node => {
+        if (!/^[0-9a-f-]{36}$/i.test(node.dataset.turnId || '')) return;
+        const conversationId = w.conversationId, turnId = node.dataset.turnId;
+        const area = document.createElement('div'); area.className = 'af-tools';
+        const status = document.createElement('small'); status.setAttribute('role', 'status');
+        const votes = ['up', 'down'].map(rating => {
+          const b = button(rating === 'up' ? '👍' : '👎', async () => {
+            votes.forEach(v => v.disabled = true); status.textContent = 'Envoi…';
+            try {
+              await w.json(w.dataset.endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event: 'feedback', conversationId, turnId, rating }) });
+              node.dataset.rating = rating; votes.forEach((v, i) => v.setAttribute('aria-pressed', String(['up', 'down'][i] === rating)));
+              status.textContent = 'Merci pour ton avis !'; w.saveState?.();
+            } catch { status.textContent = 'Avis non enregistré. Réessaie.'; }
+            finally { votes.forEach(v => v.disabled = false); }
+          });
+          b.setAttribute('aria-label', rating === 'up' ? 'Réponse utile' : 'Réponse peu utile');
+          b.setAttribute('aria-pressed', String(node.dataset.rating === rating)); return b;
+        });
+        area.append(...votes, status); node.after(area);
+      };
       w.lastProducts = [];
       w.buildContext = intent => ({ ...(w.dataset.product ? { productHandle: w.dataset.product } : {}), productIds: [...(intent === 'compare' && w.compareIds.size ? w.compareIds : w.lastProducts.map(p => p.id))].slice(0, 4), intent });
       w.saveState = () => {
-        try { sessionStorage.setItem(key, JSON.stringify({ conversationId: w.conversationId, expires: Date.now() + ttl, history: w.history.slice(-6), messages: [...w.log.querySelectorAll('.af-msg:not(.af-typing)')].slice(-12).map(n => ({ text: n.textContent.slice(0, 1400), user: n.classList.contains('af-user') })), products: w.lastProducts.slice(0, 4), open: !w.panel.hidden })); } catch { /* Storage can be disabled. Chat still works. */ }
+        try { sessionStorage.setItem(key, JSON.stringify({ conversationId: w.conversationId, expires: Date.now() + ttl, history: w.history.slice(-6), messages: [...w.log.querySelectorAll('.af-msg:not(.af-typing)')].slice(-12).map(n => ({ text: n.textContent.slice(0, 1400), turnId: n.dataset.turnId, rating: n.dataset.rating, user: n.classList.contains('af-user') })), products: w.lastProducts.slice(0, 4), open: !w.panel.hidden })); } catch { /* Storage can be disabled. Chat still works. */ }
       };
       const toggle = w.toggle.bind(w);
       w.toggle = open => { toggle(open); w.saveState(); };
@@ -50,7 +70,7 @@
           if (saved.expires > Date.now() && saved.expires <= Date.now() + ttl && Array.isArray(saved.messages) && Array.isArray(saved.history)) {
             if (/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(saved.conversationId || '')) w.conversationId = saved.conversationId;
             w.history = saved.history.filter(h => ['user', 'model'].includes(h.role) && typeof h.text === 'string').slice(-6).map(h => ({ role: h.role, text: h.text.slice(0, 1200) }));
-            for (const m of saved.messages.slice(-12)) if (typeof m.text === 'string') w.say(m.text.slice(0, 1400), m.user === true);
+            for (const m of saved.messages.slice(-12)) if (typeof m.text === 'string') { const node = w.say(m.text.slice(0, 1400), m.user === true); if (!m.user && /^[0-9a-f-]{36}$/i.test(m.turnId || '')) { node.dataset.turnId = m.turnId; node.dataset.rating = ['up', 'down'].includes(m.rating) ? m.rating : ''; w.feedbackControl(node); } }
             w.lastProducts = (Array.isArray(saved.products) ? saved.products : []).filter(p => p && typeof p.id === 'string' && /^\d+$/.test(p.id) && typeof p.title === 'string' && /^[a-z0-9-]+$/.test(p.handle)).slice(0, 4);
             for (const p of w.lastProducts) w.card(p);
             if (saved.open) toggle(true);

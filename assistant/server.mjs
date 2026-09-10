@@ -37,6 +37,10 @@ const server = http.createServer(async (req, res) => {
     }
     const parsed = requestSchema.safeParse(JSON.parse(Buffer.concat(chunks).toString()));
     if (!parsed.success) return reply(400, { error: 'Invalid input' });
+    if (parsed.data.event === 'feedback') {
+      const ok = await conversations.feedback(parsed.data);
+      return reply(ok ? 200 : 404, { ok });
+    }
     if (parsed.data.event) {
       const products = (await catalog.products()).filter(p => parsed.data.productIds.includes(String(p.id)));
       if (products.length !== new Set(parsed.data.productIds).size) return reply(400, { error: 'Unknown product' });
@@ -44,7 +48,7 @@ const server = http.createServer(async (req, res) => {
     }
     const result = await assistant(parsed.data);
     metrics.message(parsed.data, result);
-    if (parsed.data.conversationId) conversations.record(parsed.data, result);
+    if (parsed.data.conversationId) result.turnId = conversations.record(parsed.data, result);
     reply(200, result);
   } catch { if (!res.headersSent) reply(400, { error: 'Invalid request' }); }
   finally { active--; }

@@ -9,7 +9,7 @@ export const inputSchema = z.object({
   context: z.object({ productHandle: z.string().regex(/^[a-z0-9-]{1,200}$/).optional(), productIds: z.array(z.string().regex(/^\d{1,20}$/)).max(4).default([]), intent: z.enum(['chat', 'compare', 'complements']).default('chat') }).strict().optional(),
 }).strict();
 export const eventSchema = z.object({ event: z.literal('cart_added'), eventId: z.string().uuid(), productIds: z.array(z.string().regex(/^\d{1,20}$/)).min(1).max(4) }).strict();
-export const requestSchema = z.union([inputSchema, eventSchema]);
+export const requestSchema = z.union([inputSchema, eventSchema, z.object({ event: z.literal('feedback'), conversationId: z.string().uuid(), turnId: z.string().uuid(), rating: z.enum(['up', 'down']) }).strict()]);
 
 export function redact(text) {
   return text.replace(/[\w.+-]+@[\w.-]+\.[a-z]{2,}/gi, '[email]')
