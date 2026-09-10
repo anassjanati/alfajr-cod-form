@@ -71,7 +71,7 @@ customElements.define('alfajr-assistant', class extends HTMLElement {
     const waiting = this.say(this.labels.thinking);
     waiting.classList.add('af-typing');
     try {
-      const data = await this.json(this.dataset.endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message, history: this.history.slice(-6), ...(this.buildContext ? { context: this.buildContext(intent) } : {}) }) });
+      const data = await this.json(this.dataset.endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...(this.conversationId ? { conversationId: this.conversationId } : {}), message, history: this.history.slice(-6), ...(this.buildContext ? { context: this.buildContext(intent) } : {}) }) });
       receipt.textContent = this.labels.received;
       this.renderReply(waiting, data.mode === 'search' ? this.labels.searchReply : data.reply);
       this.history.push({ role: 'user', text: message }, { role: 'model', text: data.reply.slice(0, 1200) });

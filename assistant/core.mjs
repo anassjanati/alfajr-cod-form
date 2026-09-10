@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { policyReply, productFacts, comparisonRows, complementTerms } from './shopping.mjs';
 
 export const inputSchema = z.object({
+  conversationId: z.string().uuid().optional(),
   message: z.string().trim().min(1).max(600),
   history: z.array(z.object({ role: z.enum(['user', 'model']), text: z.string().max(1200) })).max(6).default([]),
   context: z.object({ productHandle: z.string().regex(/^[a-z0-9-]{1,200}$/).optional(), productIds: z.array(z.string().regex(/^\d{1,20}$/)).max(4).default([]), intent: z.enum(['chat', 'compare', 'complements']).default('chat') }).strict().optional(),

@@ -3,6 +3,10 @@ import { timingSafeEqual } from 'node:crypto';
 import { createAssistant, createBudget, createCatalog, requestSchema } from './core.mjs';
 import { createMetrics } from './metrics.mjs';
 
+import { createConversations } from './conversations.mjs';
+const conversations = await createConversations('/var/lib/alfajr-assistant/conversations.json');
+const cleanup = setInterval(() => conversations.flush().catch(() => {}), 3600000); cleanup.unref();
+
 const token = process.env.ASSISTANT_INTERNAL_TOKEN;
 if (!token || token.length < 32) throw new Error('ASSISTANT_INTERNAL_TOKEN must have at least 32 characters');
 const number = (key, value) => Math.max(1, Number.parseInt(process.env[key] || value, 10) || value);
@@ -18,6 +22,7 @@ const server = http.createServer(async (req, res) => {
   const supplied = Buffer.from(req.headers.authorization || '');
   const expected = Buffer.from(`Bearer ${token}`);
   if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) return reply(401, { error: 'Unauthorized' });
+  if (req.method === 'GET' && req.url.startsWith('/conversations?')) return reply(200, conversations.snapshot(new URL(req.url, 'http://localhost').searchParams.get('page')));
   if (req.method === 'GET' && req.url === '/stats') return reply(200, metrics.snapshot());
   if (req.method !== 'POST' || req.url !== '/chat') return reply(404, { error: 'Not found' });
   if (active >= 16) return reply(503, { error: 'Busy' });
@@ -39,6 +44,7 @@ const server = http.createServer(async (req, res) => {
     }
     const result = await assistant(parsed.data);
     metrics.message(parsed.data, result);
+    if (parsed.data.conversationId) conversations.record(parsed.data, result);
     reply(200, result);
   } catch { if (!res.headersSent) reply(400, { error: 'Invalid request' }); }
   finally { active--; }
@@ -49,4 +55,4 @@ server.listen(number('ASSISTANT_PORT', 3101), '127.0.0.1', () => console.log('Al
 catalog.products().catch(() => console.warn('Assistant catalog warmup unavailable'));
 const refresh = setInterval(() => catalog.products().catch(() => {}), 300000);
 refresh.unref();
-process.on('SIGTERM', () => { clearInterval(refresh); server.close(() => metrics.flush().finally(() => process.exit())); });
+process.on('SIGTERM', () => { clearInterval(refresh); server.close(() => Promise.allSettled([metrics.flush(), conversations.flush()]).finally(() => process.exit())); });

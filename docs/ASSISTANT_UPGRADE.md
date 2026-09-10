@@ -25,3 +25,11 @@ Edit `assistant/widget-source.js` and `assistant/extras-source.js`, then run `no
 The full suite passed 104 tests before deployment. The subsequent continuity and comparison refinements passed the relevant widget and core suites; extension validation revision 9 passed all five assistant files. Live checks confirmed comparison replies, product context, protected and persisted statistics, and COD health.
 
 Upgrade backups are under `/var/www/backups/alfajr-shopping-upgrade-f518f2e`. They contain the previous worker, service, application build and Nginx configuration. Preserve the current metrics file when rolling back.
+
+## Conversation review
+
+The app navigation now includes Assistant · Conversations. New widget sessions send a random conversation identifier, unrelated to customer accounts. Only requests with that identifier are recorded, so older widget versions continue without transcript logging. No IP, customer account, name or contact fields are collected. Common phone/email formats and explicitly introduced names/addresses are redacted before storage; free-form redaction is heuristic and cannot guarantee anonymity. The storefront privacy notice explains retention and merchant review.
+
+Protected worker endpoint `/conversations?page=1` returns twenty conversations per page, authenticated through the admin route. Text is rendered escaped by React. Storage is `/var/lib/alfajr-assistant/conversations.json` (0600), atomic writes with hourly expiry and shutdown flush. Retention is up to thirty days, bounded to 500 conversations, 40 turns per conversation and 5,000 total turns; older entries can be removed earlier at these limits. Existing backups do not include this new data file. Browser network errors and cart-confirmation UI messages are not conversation turns.
+
+Validation: 109 tests passed, production build passed, extension validation passed three changed files.

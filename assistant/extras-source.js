@@ -4,11 +4,12 @@
   function initialize() {
     for (const w of document.querySelectorAll('alfajr-assistant')) {
       if (!w.ready || w.extrasReady) continue;
+      w.conversationId = crypto.randomUUID();
       w.extrasReady = true; w.compareIds = new Set();
       w.lastProducts = [];
       w.buildContext = intent => ({ ...(w.dataset.product ? { productHandle: w.dataset.product } : {}), productIds: [...(intent === 'compare' && w.compareIds.size ? w.compareIds : w.lastProducts.map(p => p.id))].slice(0, 4), intent });
       w.saveState = () => {
-        try { sessionStorage.setItem(key, JSON.stringify({ expires: Date.now() + ttl, history: w.history.slice(-6), messages: [...w.log.querySelectorAll('.af-msg:not(.af-typing)')].slice(-12).map(n => ({ text: n.textContent.slice(0, 1400), user: n.classList.contains('af-user') })), products: w.lastProducts.slice(0, 4), open: !w.panel.hidden })); } catch { /* Storage can be disabled. Chat still works. */ }
+        try { sessionStorage.setItem(key, JSON.stringify({ conversationId: w.conversationId, expires: Date.now() + ttl, history: w.history.slice(-6), messages: [...w.log.querySelectorAll('.af-msg:not(.af-typing)')].slice(-12).map(n => ({ text: n.textContent.slice(0, 1400), user: n.classList.contains('af-user') })), products: w.lastProducts.slice(0, 4), open: !w.panel.hidden })); } catch { /* Storage can be disabled. Chat still works. */ }
       };
       const toggle = w.toggle.bind(w);
       w.toggle = open => { toggle(open); w.saveState(); };
@@ -34,7 +35,7 @@
         w.log.append(area);
       };
       const toolbar = document.createElement('div'); toolbar.className = 'af-tools';
-      toolbar.append(button('Comparer la sélection', () => { if (w.busy || w.cartBusy) return; w.input.value = 'Compare ces produits'; w.send('compare'); }), button('Compléter ce produit', () => { if (w.busy || w.cartBusy) return; w.input.value = 'Des fournitures pour compléter ce produit'; w.send('complements'); }), button('Recommencer', () => { if (w.busy || w.cartBusy) return; w.history = []; w.lastProducts = []; w.compareIds.clear(); w.pending = []; w.showPending(); w.log.replaceChildren(); try { sessionStorage.removeItem(key); } catch {} }));
+      toolbar.append(button('Comparer la sélection', () => { if (w.busy || w.cartBusy) return; w.input.value = 'Compare ces produits'; w.send('compare'); }), button('Compléter ce produit', () => { if (w.busy || w.cartBusy) return; w.input.value = 'Des fournitures pour compléter ce produit'; w.send('complements'); }), button('Recommencer', () => { if (w.busy || w.cartBusy) return; w.conversationId = crypto.randomUUID(); w.history = []; w.lastProducts = []; w.compareIds.clear(); w.pending = []; w.showPending(); w.log.replaceChildren(); try { sessionStorage.removeItem(key); } catch {} }));
       w.querySelector('.af-intro').after(toolbar);
       w.recordAdded = items => {
         const productIds = [...new Set(items.map(p => p.productId))].filter(id => /^\d+$/.test(id));
@@ -47,6 +48,7 @@
         if (raw && raw.length < 24000) {
           const saved = JSON.parse(raw);
           if (saved.expires > Date.now() && saved.expires <= Date.now() + ttl && Array.isArray(saved.messages) && Array.isArray(saved.history)) {
+            if (/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(saved.conversationId || '')) w.conversationId = saved.conversationId;
             w.history = saved.history.filter(h => ['user', 'model'].includes(h.role) && typeof h.text === 'string').slice(-6).map(h => ({ role: h.role, text: h.text.slice(0, 1200) }));
             for (const m of saved.messages.slice(-12)) if (typeof m.text === 'string') w.say(m.text.slice(0, 1400), m.user === true);
             w.lastProducts = (Array.isArray(saved.products) ? saved.products : []).filter(p => p && typeof p.id === 'string' && /^\d+$/.test(p.id) && typeof p.title === 'string' && /^[a-z0-9-]+$/.test(p.handle)).slice(0, 4);
