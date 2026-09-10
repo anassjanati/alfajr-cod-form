@@ -33,3 +33,7 @@ The app navigation now includes Assistant · Conversations. New widget sessions 
 Protected worker endpoint `/conversations?page=1` returns twenty conversations per page, authenticated through the admin route. Text is rendered escaped by React. Storage is `/var/lib/alfajr-assistant/conversations.json` (0600), atomic writes with hourly expiry and shutdown flush. Retention is up to thirty days, bounded to 500 conversations, 40 turns per conversation and 5,000 total turns; older entries can be removed earlier at these limits. Existing backups do not include this new data file. Browser network errors and cart-confirmation UI messages are not conversation turns.
 
 Validation: 109 tests passed, production build passed, extension validation passed three changed files.
+
+## Darija search quality
+
+`assistant/search.mjs` maps common Darija/Arabic stationery words and colors to catalogue terms. Recognized product families require a matching title, preventing incidental description matches. Explicit Darija/French price caps remain enforced even when Gemini plans a different budget. Offline searches ask for clarification when empty; short budget/color followups reuse the latest user product family. Suggestions are described as nearby matches, with exact models and compatibility left to catalogue evidence. Tested 21 search/core scenarios. This update only changes the worker; no widget or schema changes.
