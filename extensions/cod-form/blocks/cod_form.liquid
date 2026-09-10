@@ -45,8 +45,9 @@
         </header>
 
         <div class="alfajr-cod-v2__product" data-cod-product-card>
+  {% assign cod_image = product.selected_or_first_available_variant.featured_image | default: product.featured_image %}
   <img
-    src="{{ product.selected_or_first_available_variant.featured_image | default: product.featured_image | image_url: width: 180 }}"
+    {% if cod_image %}src="{{ cod_image | image_url: width: 180 }}"{% else %}hidden{% endif %}
     alt="{{ product.title | escape }}"
     width="76"
     height="76"
@@ -167,26 +168,26 @@
                   required
                 >
                 <datalist id="alfajr-cities-{{ block.id }}">
-                  <option value="Fès">
-                  <option value="Casablanca">
-                  <option value="Rabat">
-                  <option value="Marrakech">
-                  <option value="Tanger">
-                  <option value="Agadir">
-                  <option value="Meknès">
-                  <option value="Oujda">
-                  <option value="Kénitra">
-                  <option value="Tétouan">
-                  <option value="Safi">
-                  <option value="El Jadida">
-                  <option value="Nador">
-                  <option value="Béni Mellal">
-                  <option value="Taza">
-                  <option value="Settat">
-                  <option value="Khouribga">
-                  <option value="Errachidia">
-                  <option value="Laâyoune">
-                  <option value="Dakhla">
+                  <option value="Fès"></option>
+                  <option value="Casablanca"></option>
+                  <option value="Rabat"></option>
+                  <option value="Marrakech"></option>
+                  <option value="Tanger"></option>
+                  <option value="Agadir"></option>
+                  <option value="Meknès"></option>
+                  <option value="Oujda"></option>
+                  <option value="Kénitra"></option>
+                  <option value="Tétouan"></option>
+                  <option value="Safi"></option>
+                  <option value="El Jadida"></option>
+                  <option value="Nador"></option>
+                  <option value="Béni Mellal"></option>
+                  <option value="Taza"></option>
+                  <option value="Settat"></option>
+                  <option value="Khouribga"></option>
+                  <option value="Errachidia"></option>
+                  <option value="Laâyoune"></option>
+                  <option value="Dakhla"></option>
                 </datalist>
                 <small data-error-for="city"></small>
               </div>
@@ -268,7 +269,8 @@
         "id": "{{ variant.id }}",
         "title": {{ variant.title | json }},
         "price": {{ variant.price }},
-        "image": {{ variant.featured_image | default: product.featured_image | image_url: width: 180 | json }},
+        {% assign cod_variant_image = variant.featured_image | default: product.featured_image %}
+        "image": {% if cod_variant_image %}{{ cod_variant_image | image_url: width: 180 | json }}{% else %}null{% endif %},
         "available": {{ variant.available | json }}
       }{% unless forloop.last %},{% endunless %}
     {% endfor %}
