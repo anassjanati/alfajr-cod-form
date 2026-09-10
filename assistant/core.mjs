@@ -138,6 +138,15 @@ export function createAssistant({ catalog, budget, apiKey, model, fetcher = fetc
 
   return async rawInput => {
     const input = inputSchema.parse(rawInput);
+    const question = normalize(input.message);
+    const wantsContact = /whats\s*app|contact|telephone|joindre|appeler|conseiller|موظف|واتساب|واتس|تواصل|رقم|nmra|num[eé]ro/i.test(question);
+    const wantsLocation = /localisation|adresse|address|location|فين|العنوان|الموقع|fin\s+(?:kayn|jat|kayna)|win\s+/i.test(question);
+    if (wantsContact || wantsLocation) {
+      const parts = [];
+      if (wantsContact) parts.push('Pour parler à notre équipe / للتواصل مع الفريق : https://wa.me/212650512222');
+      if (wantsLocation) parts.push('Notre adresse / العنوان : 55 Ave Mohammed es Slaoui, Fès 30050.\nhttps://maps.google.com/?q=55+Ave+Mohammed+es+Slaoui,+Fes+30050');
+      return { mode: 'info', reply: parts.join('\n\n'), products: [] };
+    }
     const safe = { message: redact(input.message), history: input.history.map(h => ({ ...h, text: redact(h.text) })) };
     let products;
     try { products = await catalog.products(); } catch {
