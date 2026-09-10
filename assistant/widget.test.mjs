@@ -50,6 +50,7 @@ describe('real widget with simulated Shopify responses', () => {
     const saved = first.w.sessionStorage.getItem('alfajr-chat-v2'); expect(saved).toContain('stylo');
     const next = setup(saved); await next.extras();
     expect(next.widget.history).toHaveLength(2); expect(next.widget.log.textContent).toContain('stylo');
+    expect(next.widget.log.textContent).toContain('Un stylo pour vous.');
     expect(next.widget.pending).toHaveLength(0); expect(next.writes()).toHaveLength(0);
   });
   it('expires old sessions and renders only approved contact/policy links', async () => {

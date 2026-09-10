@@ -15,7 +15,11 @@ export function productFacts(p) {
 }
 
 export function comparisonRows(products) {
-  return products.slice(0, 3).map(p => ({ id: String(p.id), handle: p.handle, title: p.title, type: p.product_type || 'Non précisé', description: String(p.body_html || '').replace(/<[^>]*>/g, ' ').slice(0, 300), options: [...new Set(p.variants.map(v => v.title))].slice(0, 10).join(', ') }));
+  return products.slice(0, 3).map(p => {
+    const text = String(p.body_html || '').replace(/<[^>]*>/g, ' ');
+    const start = text.search(/spécifications techniques|caractéristiques techniques|détails techniques|fiche technique|dimensions\s*:/i);
+    return { id: String(p.id), handle: p.handle, title: p.title, type: p.product_type || 'Non précisé', description: start >= 0 ? text.slice(start, start + 650) : 'Caractéristiques détaillées : consulter la fiche produit.', options: [...new Set(p.variants.map(v => v.title))].slice(0, 10).join(', ') };
+  });
 }
 
 export function complementTerms(product) {

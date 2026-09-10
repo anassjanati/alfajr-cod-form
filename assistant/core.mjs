@@ -80,7 +80,7 @@ export function createCatalog({ fetcher = fetch, origin = 'https://al-fajr.ma', 
         if (!Array.isArray(data[field])) throw new Error('Invalid catalog');
         rows.push(...data[field].map(row => field === 'collections' ? { title: row.title, handle: row.handle } : {
           id: row.id, title: row.title, handle: row.handle, product_type: row.product_type,
-          tags: row.tags, body_html: String(row.body_html || '').replace(/<[^>]*>/g, ' ').slice(0, 1600),
+          tags: row.tags, body_html: String(row.body_html || '').replace(/<[^>]*>/g, ' ').slice(0, 6000),
           images: row.images?.slice(0, 1).map(image => ({ src: image.src })),
           variants: row.variants?.map(v => ({ id: v.id, title: v.title, available: v.available, price: v.price })) || [],
         }));
@@ -173,7 +173,8 @@ export function createAssistant({ catalog, budget, apiKey, model, fetcher = fetc
       const base = current || recent[0];
       const terms = complementTerms(base);
       if (!terms) return { mode: 'info', topic: 'complements', reply: base ? 'Pour éviter une incompatibilité, notre équipe peut confirmer les accessoires adaptés à ce produit : https://wa.me/212650512222' : 'Ouvre une fiche produit, puis choisis « Compléter ce produit ».', products: [] };
-      return { mode: 'recommendation', topic: 'complements', reply: 'Voici des fournitures qui peuvent compléter ton achat. Choisis uniquement celles dont tu as besoin.', products: rankProducts(products.filter(p => p.id !== base.id), terms).slice(0, 4).map(publicProduct) };
+      const suggestions = terms.split(' ').flatMap(term => rankProducts(products.filter(p => p.id !== base.id && normalize(p.title).startsWith(term)), term).slice(0, 1));
+      return { mode: 'recommendation', topic: 'complements', reply: 'Voici des fournitures qui peuvent compléter ton achat. Choisis uniquement celles dont tu as besoin.', products: [...new Map(suggestions.map(p => [p.id, p])).values()].slice(0, 4).map(publicProduct) };
     }
     const explicitBudget = normalize(safe.message).match(/(?:moins de|maximum|max|budget de|under)\s*(\d+(?:[.,]\d+)?)\s*(?:dh|mad|dirhams?)\b/);
     let fallbackTerms = explicitBudget ? safe.message.replace(explicitBudget[0], '') : safe.message;

@@ -79,9 +79,8 @@ customElements.define('alfajr-assistant', class extends HTMLElement {
       this.lastProducts = (data.products || []).map(p => ({ id: p.id, title: p.title, handle: p.handle, image: p.image }));
       if (data.comparison) this.renderComparison?.(data.comparison);
       for (const product of data.products || []) this.card(product);
-      this.saveState?.();
     } catch { waiting.textContent = this.labels.unavailable; }
-    finally { waiting.classList.remove('af-typing'); this.busy = false; this.form.querySelector('button').disabled = false; this.log.scrollTop = this.log.scrollHeight; }
+    finally { waiting.classList.remove('af-typing'); this.busy = false; this.form.querySelector('button').disabled = false; this.log.scrollTop = this.log.scrollHeight; this.saveState?.(); }
   }
   card(product) {
     if (!/^[a-z0-9-]+$/.test(product.handle)) return;
