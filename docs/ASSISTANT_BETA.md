@@ -2,7 +2,7 @@
 
 This branch adds a Shopify app embed and a separate Node service on the existing DigitalOcean Droplet. Source defaults are disabled. The beta deployment uses an isolated forwarding app; the existing COD process and database schema are unchanged.
 
-## Installed deployment (9 September 2026)
+## Installed deployment (10 September 2026)
 
 - Canonical store: `piu043-g7.myshopify.com`; public domain: `al-fajr.ma`.
 - Original COD: `/var/www/alfajr-cod-form`, PM2 `alfajr-cod-form`, port 3003. Its running build was not replaced or restarted.
@@ -10,7 +10,7 @@ This branch adds a Shopify app embed and a separate Node service on the existing
 - Worker: `/opt/alfajr-assistant`, systemd `alfajr-assistant`, loopback port 3101, unprivileged user. Secrets are in root-only `/etc/alfajr-assistant.env` and are never committed.
 - Model: `gemini-3.5-flash-lite`. Real Gemini generation and a signed public app-proxy request both succeeded. The service uses `--dns-result-order=ipv4first`: the Droplet's IPv6 route was rejected by Google while its IPv4 route succeeded.
 - Published catalogue snapshot: 2,407 products and 226 collections, refreshed through paginated public feeds.
-- Preview theme: `149759524943`, Al Fajr - Assistant Beta Preview. Existing live theme: `148038418511`. Enable only the `shopping_assistant` app embed; do not publish the entire preview copy over live.
+- Preview theme: `149759524943`, Al Fajr - Assistant Beta Preview. Live theme: `148038418511`, assistant embed enabled and public AI response verified on 10 September 2026. For future updates, enable only the `shopping_assistant` app embed; do not publish the entire preview copy over live.
 - Original server backups: `/var/www/backups/alfajr-before-assistant-20260909`. Local theme settings backups are kept outside Git.
 - Validation: 94 automated tests passed; real widget consent, product selection, explicit add confirmation and the resulting 7 MAD / quantity-one cart line were verified. The test line was removed. Mobile layout checked at 390 × 844. Intermittent AI fallback was observed; no live high-load capacity claim is made.
 
