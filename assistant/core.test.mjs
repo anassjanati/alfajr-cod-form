@@ -87,6 +87,17 @@ describe('Gemini integration with simulated responses', () => {
     expect((await assistant({ message: 'stylo' })).mode).toBe('search');
     expect(fetcher).not.toHaveBeenCalled();
   });
+  it('keeps explicit budgets and ignores conversational words without AI', async () => {
+    const assistant = createAssistant({ catalog, budget: createBudget() });
+    const result = await assistant({ message: 'Je cherche un stylo bleu pour ecole moins de 30 DH' });
+    expect(result.products.map(p => p.id)).toEqual(['1']);
+  });
+  it('preserves planned constraints when answer generation fails', async () => {
+    const fetcher = vi.fn().mockResolvedValueOnce(geminiResponse({ terms: 'stylo', collection: '', maxPrice: 30 }))
+      .mockResolvedValueOnce(new Response('', { status: 429 }));
+    const assistant = createAssistant({ catalog, fetcher, apiKey: 'test', model: 'test-model', budget: createBudget() });
+    expect((await assistant({ message: 'bghit stilo' })).products.map(p => p.id)).toEqual(['1']);
+  });
   it('handles an unavailable catalogue without an AI call', async () => {
     const fetcher = vi.fn();
     const assistant = createAssistant({ catalog: { products: async () => { throw new Error(); } }, fetcher, budget: createBudget() });

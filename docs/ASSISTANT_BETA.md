@@ -1,6 +1,20 @@
 # Al Fajr shopping assistant beta
 
-This branch adds a Shopify app embed and a separate Node service on the existing DigitalOcean Droplet. Nothing is enabled by default. Existing COD routes, database schema and Shopify configuration are unchanged.
+This branch adds a Shopify app embed and a separate Node service on the existing DigitalOcean Droplet. Source defaults are disabled. The beta deployment uses an isolated forwarding app; the existing COD process and database schema are unchanged.
+
+## Installed deployment (9 September 2026)
+
+- Canonical store: `piu043-g7.myshopify.com`; public domain: `al-fajr.ma`.
+- Original COD: `/var/www/alfajr-cod-form`, PM2 `alfajr-cod-form`, port 3003. Its running build was not replaced or restarted.
+- Assistant forwarding app: `/var/www/alfajr-cod-form-assistant-beta`, PM2 `alfajr-cod-form-beta`, port 3005. Nginx routes only exact `/api/assistant` here. Existing COD traffic still uses port 3003.
+- Worker: `/opt/alfajr-assistant`, systemd `alfajr-assistant`, loopback port 3101, unprivileged user. Secrets are in root-only `/etc/alfajr-assistant.env` and are never committed.
+- Model: `gemini-3.5-flash-lite`. Real Gemini generation and a signed public app-proxy request both succeeded. The service uses `--dns-result-order=ipv4first`: the Droplet's IPv6 route was rejected by Google while its IPv4 route succeeded.
+- Published catalogue snapshot: 2,407 products and 226 collections, refreshed through paginated public feeds.
+- Preview theme: `149759524943`, Al Fajr - Assistant Beta Preview. Existing live theme: `148038418511`. Enable only the `shopping_assistant` app embed; do not publish the entire preview copy over live.
+- Original server backups: `/var/www/backups/alfajr-before-assistant-20260909`. Local theme settings backups are kept outside Git.
+- Validation: 94 automated tests passed; real widget consent, product selection, explicit add confirmation and the resulting 7 MAD / quantity-one cart line were verified. The test line was removed. Mobile layout checked at 390 × 844. Intermittent AI fallback was observed; no live high-load capacity claim is made.
+
+For this installed topology, roll back by disabling the assistant app embed, removing only the added Nginx `location = /api/assistant` block (validate with `nginx -t` before reload), stopping PM2 `alfajr-cod-form-beta`, and stopping `alfajr-assistant`. The original COD process can remain running. Keep secrets and backups restricted.
 
 ## How it works
 
@@ -45,7 +59,7 @@ First inspect the actual Droplet's available memory, Node path, existing process
 
 - Run `npx vitest run` and `npm run build`.
 - Open the unpublished theme on mobile and desktop; verify keyboard focus, Escape, variant selection and the COD button remaining usable.
-- Ask in French, Arabic and Darija for products from several collections. Check budget relevance and actual product links; translation/retrieval quality is not yet evaluated against real Gemini output.
+- Ask in French, Arabic and Darija for products from several collections. Check budget relevance and actual product links; broad retrieval quality still needs merchant feedback beyond the initial real Gemini smoke tests.
 - Confirm one product and a multi-product selection, then view the actual cart. Check the COD form recognizes those cart lines. Only the cart icon is refreshed generically; a theme-specific drawer integration may be needed. The widget always exposes a direct cart link.
 - Simulate sold-out products, a price change, a 429 response, an unavailable worker, and an uncertain cart write. Verify confirmation never repeats the write automatically.
 - Check the app-proxy signature, canonical shop allowlist, and internal token rejection in staging. The existing reverse proxy must replace untrusted client-IP headers; validate per-client limiting behind Shopify's proxy. A global limit and bounded in-flight requests still apply.
@@ -59,7 +73,7 @@ First inspect the actual Droplet's available memory, Node path, existing process
 - Phone/email patterns are redacted on the worker. This is not complete anonymization: free text can include addresses or names. The UI explains Gemini free-tier processing before the first submission and asks users to avoid personal information. Neither server logs chat bodies or keys, and chat history is held only in the tab's memory. Google processes submitted text under its API terms; review the store's customer notice before launch.
 - Free Gemini quotas are shared across the project. Local limits, a 60-second circuit breaker on upstream 429/5xx, and a two-conversation AI cap degrade to lexical product search, not unlimited AI availability. No Redis, cross-worker quota enforcement or horizontal autoscaling is included in this beta. Keep one worker.
 - Search/card text defaults to French with Darija prompts. Gemini is instructed to follow the shopper's language. Add locale files for fully translated fixed UI labels.
-- The worker is process-isolated; its lightweight forwarding route still runs in the COD app. The common Droplet/network remain shared failure points. No live changes, account keys, end-to-end Gemini verification or deployment are included in this checkout.
+- The worker is process-isolated. The installed forwarding route runs in a separate copy of the app as documented above. The common Droplet/network remain shared failure points. Deployment secrets are excluded from this checkout.
 
 ## Rollback
 
