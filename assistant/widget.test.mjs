@@ -45,6 +45,25 @@ function setup(saved) {
 }
 
 describe('real widget with simulated Shopify responses', () => {
+  it('prepares a bundle without a cart write and requires confirmation', async () => {
+    const { widget, writes, extras } = setup(); await extras();
+    widget.bundleCard({currency:'MAD',budgetCents:3000,items:[{handle:'stylo',productId:'1',variantId:'101',quantity:1,price:2000}]});
+    widget.log.querySelector('button').click();
+    await vi.waitFor(() => expect(widget.pending).toHaveLength(1));
+    expect(writes()).toHaveLength(0);
+    expect(widget.confirmBox.textContent).toContain('Total');
+    await widget.addPending();
+    expect(writes()).toHaveLength(1);
+  });
+  it('blocks a bundle when its current total has risen past the agreed budget', async () => {
+    const { widget, writes, setPrice, extras } = setup(); await extras();
+    setPrice(4000);
+    widget.bundleCard({currency:'MAD',budgetCents:3000,items:[{handle:'stylo',productId:'1',variantId:'101',quantity:1,price:2000}]});
+    widget.log.querySelector('button').click();
+    await vi.waitFor(() => expect(widget.log.textContent).toContain('dépasse'));
+    expect(widget.pending).toHaveLength(0);
+    expect(writes()).toHaveLength(0);
+  });
   it('restores chat on another page without restoring pending cart writes', async () => {
     const first = setup(); await first.extras(); first.widget.input.value = 'stylo'; await first.widget.send();
     const saved = first.w.sessionStorage.getItem('alfajr-chat-v2'); expect(saved).toContain('stylo');
@@ -59,9 +78,9 @@ describe('real widget with simulated Shopify responses', () => {
     const node = state.widget.say(''); state.widget.renderReply(node, 'https://evil.example https://al-fajr.ma/pages/livraison');
     expect(node.querySelectorAll('a')).toHaveLength(1); expect(node.querySelector('a').href).toContain('/pages/livraison');
   });
-  it('opens, focuses the composer and closes on Escape', () => {
+  it('opens without focusing the mobile keyboard and closes on Escape', () => {
     const { widget, w } = setup(); widget.launch.click();
-    expect(widget.panel.hidden).toBe(false); expect(w.document.activeElement).toBe(widget.input);
+    expect(widget.panel.hidden).toBe(false); expect(w.document.activeElement).toBe(widget.querySelector('.af-close'));
     widget.input.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     expect(widget.panel.hidden).toBe(true); expect(w.document.activeElement).toBe(widget.launch);
   });

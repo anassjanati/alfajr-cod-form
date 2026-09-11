@@ -18,3 +18,22 @@ alfajr-assistant .af-receipt{display:block;text-align:right;color:#526883;font-s
 body:has(alfajr-assistant) a[aria-label="Contact WhatsApp"]{display:none!important}alfajr-assistant{bottom:24px}alfajr-assistant .af-launch{width:58px;height:58px;padding:14px;border-radius:50%;background:#164d9d;border:3px solid #f28b21;display:flex;align-items:center;justify-content:center}alfajr-assistant .af-panel{bottom:72px}alfajr-assistant .af-human{display:block;font-size:12px;font-weight:650;margin:6px 0 8px}alfajr-assistant header{border-top:4px solid #f28b21}alfajr-assistant .af-privacy{font-size:10px}@media(max-width:480px){alfajr-assistant{bottom:20px}}
 
 alfajr-assistant .af-tools{display:flex;gap:5px;flex-wrap:wrap;padding:7px 12px;border-bottom:1px solid #e2e9f3}alfajr-assistant .af-tools button{font-size:10px;min-height:32px;padding:5px 8px;background:#edf4ff;color:#163d78}alfajr-assistant .af-compare-choice{display:flex;gap:5px;align-items:center;font-size:11px;margin:5px 0}alfajr-assistant .af-compare-choice input{width:16px;height:16px;accent-color:#164d9d}alfajr-assistant .af-comparison{padding:10px;background:#edf4ff;border-radius:12px;font-size:12px}alfajr-assistant .af-comparison section{border-bottom:1px solid #b9cbe3;padding:10px 0}alfajr-assistant .af-context{font-size:11px;overflow:hidden;max-height:36px}alfajr-assistant .af-complement-offer{font-size:12px;margin-bottom:10px}
+alfajr-assistant .af-launch{width:60px;height:60px;background:#25d366;border:0;box-shadow:0 5px 20px #0003;color:#fff}
+alfajr-assistant .af-launch svg{width:32px;height:32px;flex-shrink:0}
+alfajr-assistant .af-panel{max-width:calc(100vw - 24px)}
+alfajr-assistant .af-card>*{min-width:0;overflow-wrap:anywhere}
+alfajr-assistant .af-log{min-height:0}
+alfajr-assistant .af-panel>header,alfajr-assistant .af-form,alfajr-assistant .af-panel>footer{flex-shrink:0}
+alfajr-assistant input,alfajr-assistant select{font-size:16px}
+@media(max-width:600px){
+alfajr-assistant{right:max(14px,env(safe-area-inset-right));bottom:max(18px,env(safe-area-inset-bottom))}
+alfajr-assistant .af-panel{position:fixed;top:calc(var(--af-view-top,0px) + 8px);bottom:auto;left:8px;right:8px;width:auto;max-width:none;height:calc(var(--af-view-height,100dvh) - 16px);max-height:none;border-radius:18px;padding-bottom:env(safe-area-inset-bottom)}
+alfajr-assistant:has(.af-panel:not([hidden])) .af-launch{visibility:hidden}
+alfajr-assistant header{padding:10px 12px}
+alfajr-assistant .af-intro{padding:7px 12px;max-height:24%;overflow:auto;flex-shrink:0}
+alfajr-assistant .af-tools{padding:5px 10px;max-height:70px;overflow:auto;flex-shrink:0}
+alfajr-assistant .af-log{padding:10px;flex:1 1 0}
+alfajr-assistant .af-form{padding:8px 10px;margin:0}
+alfajr-assistant .af-panel>footer{padding:0 12px 8px;gap:10px;flex-wrap:wrap}
+alfajr-assistant .af-confirm{max-height:25%;flex-shrink:0}
+}

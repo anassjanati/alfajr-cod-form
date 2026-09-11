@@ -6,6 +6,36 @@
       if (!w.ready || w.extrasReady) continue;
       w.conversationId = crypto.randomUUID();
       w.extrasReady = true; w.compareIds = new Set();
+      w.bundleCard = function(bundle) {
+    if (bundle.currency !== 'MAD' || !Number.isSafeInteger(bundle.budgetCents) || bundle.budgetCents <= 0 || !Array.isArray(bundle.items) || !bundle.items.length || bundle.items.length > 4) return;
+    if (!bundle.items.every(i => /^[a-z0-9-]+$/.test(i.handle) && /^\d+$/.test(i.variantId) && Number.isInteger(i.quantity) && i.quantity > 0 && i.quantity <= 10 && Number.isSafeInteger(i.price) && i.price > 0)) return;
+    const total = bundle.items.reduce((sum, i) => sum + i.price * i.quantity, 0);
+    if (total > bundle.budgetCents) return;
+    const box = document.createElement('div'); box.className = 'af-msg';
+    const summary = document.createElement('p');
+    summary.textContent = `${this.labels.total}: ${this.money(total, 'MAD')} / ${this.labels.budget}: ${this.money(bundle.budgetCents, 'MAD')}`;
+    const button = document.createElement('button'); button.type = 'button'; button.textContent = this.labels.prepareBundle;
+    box.append(summary, button); this.log.append(box);
+    button.onclick = async () => {
+      if (this.cartBusy || this.busy) return;
+      button.disabled = true; this.cartBusy = true;
+      try {
+        const cart = await this.json(this.root('cart.js'));
+        if (cart.currency !== 'MAD') throw new Error('Currency changed');
+        this.currency = cart.currency;
+        const pending = [];
+        for (const item of bundle.items) {
+          const product = await this.json(this.root(`products/${item.handle}.js`));
+          const variant = product.variants.find(v => String(v.id) === item.variantId);
+          if (!variant?.available || product.requires_selling_plan) throw new Error('Unavailable');
+          pending.push({ id: item.variantId, productId: item.productId, handle: item.handle, title: product.title, variant: variant.public_title || variant.title, price: variant.price, quantity: item.quantity });
+        }
+        if (pending.reduce((sum, p) => sum + p.price * p.quantity, 0) > bundle.budgetCents) { this.say(this.labels.overBudget); return; }
+        this.pending = pending; this.pendingBudget = bundle.budgetCents; this.showPending();
+      } catch { this.say(this.labels.unavailable); }
+      finally { button.disabled = false; this.cartBusy = false; }
+    };
+  };
       w.feedbackControl = node => {
         if (!/^[0-9a-f-]{36}$/i.test(node.dataset.turnId || '')) return;
         const conversationId = w.conversationId, turnId = node.dataset.turnId;

@@ -10,6 +10,7 @@
     <footer><a href="{{ routes.search_url }}?type=product">{{ 'assistant.search' | t }}</a><a href="{{ routes.cart_url }}">{{ 'assistant.cart' | t }}</a></footer>
   </section>
   <script type="application/json" class="af-labels">{
+    "total": {{ 'assistant.total' | t | json }}, "budget": {{ 'assistant.budget' | t | json }}, "prepareBundle": {{ 'assistant.prepare_bundle' | t | json }}, "overBudget": {{ 'assistant.over_budget' | t | json }},
     "thinking": {{ 'assistant.thinking' | t | json }}, "unavailable": {{ 'assistant.unavailable' | t | json }}, "sent": {{ 'assistant.sent' | t | json }}, "received": {{ 'assistant.received' | t | json }}, "searchReply": {{ 'assistant.search_reply' | t | json }},
     "select": {{ 'assistant.select' | t | json }}, "choose": {{ 'assistant.choose' | t | json }},
     "quantity": {{ 'assistant.quantity' | t | json }}, "confirmQuestion": {{ 'assistant.confirm_question' | t | json }},

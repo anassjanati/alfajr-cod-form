@@ -19,12 +19,22 @@ customElements.define('alfajr-assistant', class extends HTMLElement {
     this.querySelector('.af-no').onclick = () => { if (!this.cartBusy) { this.pending = []; this.showPending(); this.say(this.labels.cancelled); } };
     this.querySelector('.af-yes').onclick = () => this.addPending();
     this.form.onsubmit = e => { e.preventDefault(); this.send(); };
+    this.fitViewport = () => {
+      const viewport = window.visualViewport;
+      this.style.setProperty('--af-view-height', `${viewport?.height || window.innerHeight}px`);
+      this.style.setProperty('--af-view-top', `${viewport?.offsetTop || 0}px`);
+    };
+    window.visualViewport?.addEventListener('resize', this.fitViewport);
+    window.visualViewport?.addEventListener('scroll', this.fitViewport);
+    window.addEventListener('resize', this.fitViewport);
+    this.fitViewport();
     document.dispatchEvent(new CustomEvent('alfajr:ready'));
   }
   toggle(open) {
     this.panel.hidden = !open;
     this.launch.setAttribute('aria-expanded', String(open));
-    (open ? this.input : this.launch).focus();
+    this.fitViewport();
+    (open ? this.querySelector('.af-close') : this.launch).focus({ preventScroll: true });
   }
   say(text, user = false) {
     const p = document.createElement('p');
@@ -80,6 +90,7 @@ customElements.define('alfajr-assistant', class extends HTMLElement {
       this.lastProducts = (data.products || []).map(p => ({ id: p.id, title: p.title, handle: p.handle, image: p.image }));
       if (data.comparison) this.renderComparison?.(data.comparison);
       for (const product of data.products || []) this.card(product);
+      if (data.bundle) this.bundleCard?.(data.bundle);
       this.feedbackControl?.(waiting);
     } catch { waiting.textContent = this.labels.unavailable; }
     finally { waiting.classList.remove('af-typing'); this.busy = false; this.form.querySelector('button').disabled = false; this.log.scrollTop = this.log.scrollHeight; this.saveState?.(); }
@@ -120,6 +131,7 @@ customElements.define('alfajr-assistant', class extends HTMLElement {
         const count = Number(quantity.value);
         if (!v || !Number.isInteger(count) || count < 1 || count > 10) { quantity.reportValidity(); return; }
         if (this.pending.length >= 4 && !this.pending.some(p => p.id === String(v.id))) return;
+        this.pendingBudget = null;
         this.pending = this.pending.filter(p => p.id !== String(v.id));
         this.pending.push({ id: String(v.id), productId: String(product.id), title: live.title, variant: v.public_title || v.title, price: v.price, quantity: count, handle: product.handle });
         this.showPending();
@@ -128,7 +140,7 @@ customElements.define('alfajr-assistant', class extends HTMLElement {
   }
   showPending() {
     this.confirmBox.hidden = !this.pending.length;
-    this.confirmBox.querySelector('p').textContent = this.labels.confirmQuestion + '\n' + this.pending.map(p => `${p.quantity} × ${p.title} (${p.variant}) — ${this.money(p.price * p.quantity)}`).join('\n');
+    this.confirmBox.querySelector('p').textContent = this.labels.confirmQuestion + '\n' + this.pending.map(p => `${p.quantity} × ${p.title} (${p.variant}) — ${this.money(p.price * p.quantity)}`).join('\n') + '\n' + this.labels.total + ': ' + this.money(this.pending.reduce((sum, p) => sum + p.price * p.quantity, 0));
   }
   async addPending() {
     if (this.cartBusy || !this.pending.length) return;
@@ -147,6 +159,7 @@ customElements.define('alfajr-assistant', class extends HTMLElement {
         if (variant.price !== item.price) { item.price = variant.price; changed = true; }
       }
       if (changed) { this.pending = items; this.showPending(); this.say(this.labels.changed); return; }
+      if (this.pendingBudget && (cart.currency !== 'MAD' || items.reduce((sum, p) => sum + p.price * p.quantity, 0) > this.pendingBudget)) { this.say(this.labels.overBudget); return; }
       writeStarted = true;
       const result = await this.json(this.root('cart/add.js'), {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
