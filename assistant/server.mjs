@@ -1,4 +1,6 @@
 import http from 'node:http';
+import { setDefaultResultOrder } from 'node:dns';
+setDefaultResultOrder('ipv4first');
 import { timingSafeEqual } from 'node:crypto';
 import { createAssistant, createBudget, createCatalog, requestSchema } from './core.mjs';
 import { createMetrics } from './metrics.mjs';
