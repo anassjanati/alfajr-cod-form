@@ -1,6 +1,20 @@
 import { it, expect, vi } from 'vitest';
 import { createAssistant, createBudget } from './core.mjs';
+import { needsAdvice, smallTalk } from './dialogue.mjs';
 const catalog = { products: async () => [], collections: async () => [] };
+it('clarifies ambiguous bags and desk setup before selecting products',()=>{
+  expect(needsAdvice('Bghit xkara').products).toEqual([]);
+  expect(needsAdvice('bghit nqad bureau diali o endi budget dial 300dh').products).toEqual([]);
+  expect(needsAdvice('bghit xkara laptop')).toBeNull();
+  expect(smallTalk('Salaaaam').reply).toContain('وعليكم');
+  expect(smallTalk('lanas',[{role:'user',text:'slm'}]).reply).toContain('لاباس');
+});
+it('does not invent a store-wide schoolbook exclusion',async()=>{
+  const assistant=createAssistant({catalog,budget:createBudget()});
+  const result=await assistant({message:'bghit ktab faransiya mostawa 6 btidaei riyada'});
+  expect(result.reply).toContain('https://wa.me/');
+  expect(result.reply).not.toContain('ما كنوفروش');
+});
 it('greets without pushing the viewed product or using Gemini', async () => {
   const fetcher = vi.fn();
   const assistant = createAssistant({ catalog: {}, fetcher, budget: createBudget() });

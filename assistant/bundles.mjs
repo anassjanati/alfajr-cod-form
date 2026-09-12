@@ -3,7 +3,7 @@ import { isDarija } from './dialogue.mjs';
 const recipes = {
   dessin: [['Carnet à dessin', /^(?:carnet|bloc).*dessin/i], ['Crayon graphite', /crayon.*(?:graphite|papier|hb|dessin)/i], ['Gomme', /^gomme\b/i]],
   peinture: [['Peinture acrylique', /(?:peinture|acrylique).*acrylique|acrylique.*(?:peinture|couleur)/i], ['Pinceaux', /^pinceaux?\b/i], ['Toile', /^(?:toile|canvas)\b/i]],
-  bureau: [['Carnet', /^(?:carnet|notebook)\b/i], ['Stylo', /^stylo\b/i], ['Classement', /^classeur\b/i]],
+  bureau: [['Carnet A4 ou A5', /^(?:carnet|notebook)\b.*\bA[45]\b/i], ['Stylo', /^stylo\b/i], ['Classement', /^classeur\b/i]],
 };
 export function explicitBundle(text) {
   const q = text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
