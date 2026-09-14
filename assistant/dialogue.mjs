@@ -1,4 +1,4 @@
-export const isDarija = text => /[\u0600-\u06ff]|\b(?:slm|sa+l+a+m|bghit|bghitch|wach|endkom|3ndkom|3afak|afak|mabghitch|ntghda|nakl|nta|ejbk|xkara|chkara|lanas)\b/i.test(text);
+export const isDarija = text => /[\u0600-\u06ff]|\b(?:slm|sa+l+a+m|bghit|bghitch|wach|endkom|3ndkom|3afak|afak|mabghitch|ntghda|nakl|nta|ejbk|xkara|chkara|lanas|labas|elik|kan9lb|mo9arar|mdrassa|mostawa|ktab|ketab)\b/i.test(text);
 export const isCorrection = text => /mabghitch|ma\s*bghitch|ما\s*بغيتش|mach[iy]|ماشي|pas (?:ca|ça|ce|des|un)|non[, !]|plut[oô]t|je voulais/i.test(text);
 export function smallTalk(text, history = []) {
   const q = text.toLowerCase().trim().replace(/[!?.،؟]+$/g, '').trim();
@@ -6,7 +6,7 @@ export function smallTalk(text, history = []) {
   let reply;
   if (/^sa+l+a+m$/.test(q)) return {mode:'info',topic:'conversation',products:[],reply:'وعليكم السلام، مرحبا بيك عند الفجر 😊 كيفاش نقدر نعاونك؟'};
   if (q === 'lanas' && history.some(h => /salam|slm|سلام/i.test(h.text))) return {mode:'info',topic:'clarification',products:[],reply:'كتقصد «لاباس»؟ 😊'};
-  if (/^(?:(?:wach|واش)\s+(?:nta|نتا)\s+)?(?:cv|ca va|ça va|labas|لاباس)(?:\s+(?:nta|نتا))?$/.test(q)) return {mode:'info',topic:'conversation',products:[],reply:darija ? 'أنا هنا نعاونك 😊 ونتا لاباس؟' : 'Je suis là pour vous aider 😊 Et vous, ça va ?'};
+  if (/^(?:(?:wach|واش)\s+(?:nta|نتا)\s+)?(?:cv|ca va|ça va|labas|لاباس)(?:\s+(?:nta|نتا|elik|3lik|عليك))?$/.test(q)) return {mode:'info',topic:'conversation',products:[],reply:darija ? 'أنا هنا نعاونك 😊 ونتا لاباس؟' : 'Je suis là pour vous aider 😊 Et vous, ça va ?'};
   if (/^(?:h{3,}|(?:ha){2,}|(?:هه){2,}|😂+|mdr|lol)$/.test(q)) return {mode:'info',topic:'conversation',products:[],reply:darija ? 'هههه 😊' : 'Haha 😊'};
   if (/^(?:gtl[e]?k\s+la|قلت\s*ليك\s*لا|wala+|la+|non|لا)$/.test(q)) return {mode:'info',topic:'conversation',products:[],reply:darija || /gtl|wala/.test(q) ? 'سمح ليا، فهمتك غلط. نوقفو هاد الاقتراحات؛ شنو كنتي كتعني؟' : 'Pardon, je vous ai mal compris. On laisse ces suggestions. Que vouliez-vous dire ?'};
   if (/^(spirale?|سبيرال)$/i.test(q) || /bag(?:et|uette).*spiral/i.test(q)) return { mode: 'info', topic: 'clarification', products: [], reply: /bag/i.test(q) ? 'كتقصد الباگيت ديال reliure اللي كتجمع الوراق؟ واش بلاستيك ولا معدن، وشنو المقاس اللي محتاج؟' : 'كتقصد دفتر بسپيرال، ولا السپيرال ديال reliure باش تجمع الوراق؟' };
@@ -21,7 +21,7 @@ export function needsAdvice(message, history = []) {
   const darija = isDarija(message) || history.some(h => h.role === 'user' && isDarija(h.text));
   const info = reply => ({mode:'info',topic:'clarification',reply,products:[]});
   const previousUser = [...history].reverse().find(h => h.role === 'user')?.text || '';
-  if (/\b(?:xkara|chkara|chk[a]?ra|sac|cartable)\b|شكارة|محفظة/.test(q) && !/ecole|مدرس|laptop|ordinateur|pc\b|حاسوب|voyage|سفر/.test(q) && !/ecole|مدرس|laptop|ordinateur|حاسوب/.test(previousUser)) return info(darija ? 'الشكارة بغيتيها للمدرسة، للحاسوب ولا لاستعمال آخر؟' : 'Le sac est-il destiné à l’école, à un ordinateur ou à un autre usage ?');
+  if (/\b(?:xkara|chkara|chk[a]?ra|sac|cartable)\b|شكارة|محفظة/.test(q) && !/ecole|mdrassa|madrassa|scolaire|rose|violet|\d+\s*dh|مدرس|laptop|ordinateur|pc\b|حاسوب|voyage|سفر/.test(q) && !/ecole|mdrassa|madrassa|scolaire|rose|violet|\d+\s*dh|مدرس|laptop|ordinateur|حاسوب/.test(previousUser)) return info(darija ? 'الشكارة بغيتيها للمدرسة، للحاسوب ولا لاستعمال آخر؟' : 'Le sac est-il destiné à l’école, à un ordinateur ou à un autre usage ?');
   if (/bureau|مكتب/.test(q) && /nqad|nجهز|جهز|equiper|equipement|wjed|تجهيز/.test(q) && !/rangement|classement|ecriture|notes|تنظيم|كتابة|اوراق|أوراق/.test(q)) return info(darija ? 'باش نستافدو مزيان من الميزانية، شنو ناقصك فالمكتب: تنظيم الأوراق، أدوات الكتابة، ولا بجوج؟' : 'Pour utiliser votre budget utilement, avez-vous surtout besoin de ranger les documents, de prendre des notes, ou des deux ?');
   return null;
 }

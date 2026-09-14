@@ -71,3 +71,17 @@ it('does not search arbitrary conversational words in catalogue descriptions', a
   const assistant=createAssistant({catalog:{products:async()=>[{id:1,title:'Papier',body_html:'bonjour ami comment',variants:[{id:11,price:'10',available:true}]}],collections:async()=>[]},budget:createBudget()});
   expect((await assistant({message:'bonjour mon ami comment vas tu'})).products).toEqual([]);
 });
+it('handles audited greeting and references offline',async()=>{
+ const assistant=createAssistant({catalog,budget:createBudget()});
+ expect((await assistant({message:'labas elik'})).reply).toContain('لاباس');
+ expect((await assistant({message:'Bghit wahad ktab'})).reply).toContain('سميت الكتاب');
+ for(const message of ['Options 3 student book','kan9lb 3la mo9arar mostawa 6 riyad kayn??']) expect((await assistant({message})).reply).toContain('https://wa.me/');
+ expect((await assistant({message:'est ce que je peux passer direkt a la bibliotheque'})).reply).toContain('55 Ave');
+ expect(needsAdvice('cartable rose et violet 320dh')).toBeNull();
+ expect(needsAdvice('cartable mdrassa')).toBeNull();
+});
+it('includes the contact link when the model refers to WhatsApp',async()=>{
+ const fetcher=vi.fn().mockResolvedValue(new Response(JSON.stringify({candidates:[{content:{parts:[{text:JSON.stringify({action:'reply',reply:'Notre équipe WhatsApp peut confirmer.',terms:'',collection:'',maxPrice:null})}]}}]})));
+ const assistant=createAssistant({catalog,fetcher,apiKey:'test',model:'test',budget:createBudget()});
+ expect((await assistant({message:'Personnaliser son texte'})).reply).toContain('https://wa.me/212650512222');
+});
