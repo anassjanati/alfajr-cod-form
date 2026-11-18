@@ -47,8 +47,17 @@ Browser Meta events (including `Purchase` and custom `cod_*` events) require
 `Shopify.customerPrivacy.marketingAllowed()` to return true. If the consent
 API is unavailable or denies marketing consent, the block does not send a
 browser Meta event. The block loads Shopify's `consent-tracking-api` using
-`Shopify.loadFeatures` before making that decision. The server `Purchase` delivery remains best-effort as
-before; review CAPI consent handling separately for stores in regulated regions.
+`Shopify.loadFeatures` before making that decision. On COD submission, the
+storefront passes a strict boolean `marketingAllowed` snapshot to the signed
+app proxy. The server validates it (missing or invalid permission fails closed),
+and `sendMetaPurchase` skips the Conversions API request unless it is `true`.
+The Shopify order still succeeds even if Meta tracking is skipped.
+
+This is a **client-reported permission signal**, not a tamper-proof proof of
+consent: Shopify app proxies strip browser cookies, so the backend cannot
+independently verify this consent state from storefront cookies. Review the
+store's cookie-banner regions, Shopify pixel privacy configuration, and
+applicable requirements before production rollout.
 
 If a visitor starts filling the form before granting marketing consent, a
 `visitorConsentCollected` event rechecks permission and retries
@@ -65,7 +74,7 @@ To test after deploying **both the server app and theme app extension**:
    then grants consent while the form remains open: expect exactly one event.
 4. Submit one real test COD order and verify `Purchase` has matching browser
    and CAPI event IDs. Re-test with marketing consent denied; no browser Meta
-   events should be sent.
+   events or CAPI `Purchase` requests should be sent; the order must succeed.
 5. Check any hardcoded theme-level Pixel initialization separately to avoid
    loading the same Pixel twice alongside this app extension.
 
