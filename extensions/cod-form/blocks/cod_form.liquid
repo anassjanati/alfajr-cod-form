@@ -1300,6 +1300,7 @@ function setCheckoutContext(context = {}) {
           !marketingProcessingAllowed() ||
           !overlay.classList.contains('is-open') ||
           form.elements.idempotency_key.value !== formRequestId ||
+          form.dataset.metaInitiated === formRequestId ||
           !ensureConfiguredMetaPixel(config.pixelId)
         ) return;
 
@@ -1312,6 +1313,7 @@ function setCheckoutContext(context = {}) {
           : Number(variantData[currentVariantId()]?.price || 0) / 100 * Number(quantityInput?.value || 1);
         const total = subtotal + shippingFee();
 
+        form.dataset.metaInitiated = formRequestId;
         window.fbq('trackSingle', config.pixelId, 'InitiateCheckout', {
           currency: 'MAD',
           ...(Number.isFinite(total) && total >= 0 ? { value: Math.round(total * 100) / 100 } : {}),
@@ -1451,6 +1453,7 @@ function setCheckoutContext(context = {}) {
   form.elements.form_started_at.value = String(Date.now());
   form.elements.idempotency_key.value = createRequestId();
   form.dataset.started = '';
+  form.dataset.metaInitiated = '';
 
   void getMetaBrowserConfig();
   void loadMarketingPrivacyApi();
@@ -1584,6 +1587,11 @@ document.addEventListener('variant:change', () => {
               : 1
         });
 
+        void publishMetaInitiateCheckout().catch(() => {});
+      });
+
+      document.addEventListener('visitorConsentCollected', () => {
+        if (!form.dataset.started || !overlay.classList.contains('is-open')) return;
         void publishMetaInitiateCheckout().catch(() => {});
       });
 
