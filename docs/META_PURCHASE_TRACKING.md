@@ -29,6 +29,39 @@ After Shopify successfully converts the Draft Order into a real Order:
 
 Meta failures never cancel a valid Shopify order.
 
+## COD InitiateCheckout flow
+
+The COD app block prefetches the merchant's browser Pixel configuration from
+`GET /apps/alfajr-cod/api/meta-config` when the modal opens. The signed Shopify
+app proxy identifies the shop; its JSON response includes only
+`{ browserEnabled, pixelId }` and is never cached. No CAPI access token is
+exposed through this endpoint.
+
+On the **first customer input** in each newly opened COD form, the block sends
+Meta's standard browser `InitiateCheckout` event to that merchant's Pixel via
+`fbq('trackSingle', ...)`. It includes currency `MAD`, cart items and the
+estimated total (products plus shipping). The existing `cod_form_start`
+custom event remains for non-Meta reports.
+
+Browser Meta events (including `Purchase` and custom `cod_*` events) require
+`Shopify.customerPrivacy.marketingAllowed()` to return true. If the consent
+API is unavailable or denies marketing consent, the block does not send a
+browser Meta event. The block loads Shopify's `consent-tracking-api` using
+`Shopify.loadFeatures` before making that decision. The server `Purchase` delivery remains best-effort as
+before; review CAPI consent handling separately for stores in regulated regions.
+
+To test after deploying **both the server app and theme app extension**:
+
+1. Open the storefront and enable marketing consent where required.
+2. Open the COD modal and start typing in the customer fields.
+3. In Meta Events Manager → Test Events, verify one `InitiateCheckout` for the
+   configured Pixel (no event before input, no duplicates for subsequent typing).
+4. Submit one real test COD order and verify `Purchase` has matching browser
+   and CAPI event IDs. Re-test with marketing consent denied; no browser Meta
+   events should be sent.
+5. Check any hardcoded theme-level Pixel initialization separately to avoid
+   loading the same Pixel twice alongside this app extension.
+
 ## Production setup
 
 Deploy the included Prisma migration:
@@ -90,4 +123,5 @@ The credentials are ignored for every other shop, preventing one merchant's orde
 - `app/Services/meta.service.js`
 - `app/routes/app._index.jsx`
 - `app/routes/api.cod.jsx`
+- `app/routes/api.meta-config.jsx`
 - `extensions/cod-form/blocks/cod_form.liquid`
