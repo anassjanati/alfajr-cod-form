@@ -1629,6 +1629,7 @@ const payload = {
   website: form.elements.website?.value || '',
   formStartedAt: Number(form.elements.form_started_at.value || Date.now()),
   idempotencyKey: requestId,
+  marketingAllowed: marketingProcessingAllowed() === true,
   ...trackingData()
 };
 
