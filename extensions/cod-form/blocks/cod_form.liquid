@@ -1157,7 +1157,7 @@ function setCheckoutContext(context = {}) {
 
       function emitEvent(name, detail = {}) {
         window.dataLayer?.push?.({ event: name, ...detail });
-        if (typeof window.fbq === 'function') {
+        if (typeof window.fbq === 'function' && marketingProcessingAllowed()) {
           window.fbq('trackCustom', name, detail);
         }
         document.dispatchEvent(new CustomEvent(name, { detail }));
@@ -1231,16 +1231,94 @@ function setCheckoutContext(context = {}) {
         return tracking;
       }
 
-      function analyticsProcessingAllowed() {
+      function marketingProcessingAllowed() {
         try {
           const privacy = window.Shopify?.customerPrivacy;
-          if (typeof privacy?.analyticsProcessingAllowed === 'function') {
-            return privacy.analyticsProcessingAllowed();
+          if (typeof privacy?.marketingAllowed === 'function') {
+            return privacy.marketingAllowed();
           }
         } catch (_) {
-          // Shopify privacy API may not be available on every storefront.
+          return false;
         }
-        return true;
+        return false;
+      }
+
+      let marketingPrivacyReadyPromise;
+
+      function loadMarketingPrivacyApi() {
+        if (!marketingPrivacyReadyPromise) {
+          marketingPrivacyReadyPromise = new Promise((resolve) => {
+            if (typeof window.Shopify?.customerPrivacy?.marketingAllowed === 'function') {
+              resolve(true);
+              return;
+            }
+            if (typeof window.Shopify?.loadFeatures !== 'function') {
+              resolve(false);
+              return;
+            }
+            try {
+              window.Shopify.loadFeatures(
+                [{ name: 'consent-tracking-api', version: '1.0' }],
+                (error) => resolve(!error && typeof window.Shopify?.customerPrivacy?.marketingAllowed === 'function')
+              );
+            } catch (_) {
+              resolve(false);
+            }
+          });
+        }
+        return marketingPrivacyReadyPromise;
+      }
+
+      let metaBrowserConfigPromise;
+
+      function getMetaBrowserConfig() {
+        if (!metaBrowserConfigPromise) {
+          metaBrowserConfigPromise = fetch('/apps/alfajr-cod/api/meta-config', {
+            credentials: 'same-origin',
+            cache: 'no-store'
+          })
+            .then((response) => response.ok ? response.json() : null)
+            .then((config) => ({
+              browserEnabled: config?.browserEnabled === true && /^\d{5,30}$/.test(String(config.pixelId || '')),
+              pixelId: String(config?.pixelId || '')
+            }))
+            .catch(() => ({ browserEnabled: false }));
+        }
+        return metaBrowserConfigPromise;
+      }
+
+      async function publishMetaInitiateCheckout() {
+        const formRequestId = form.elements.idempotency_key.value;
+        if (!formRequestId) return;
+
+        const [config, privacyReady] = await Promise.all([
+          getMetaBrowserConfig(), loadMarketingPrivacyApi()
+        ]);
+        if (
+          !privacyReady ||
+          !config.browserEnabled ||
+          !marketingProcessingAllowed() ||
+          !overlay.classList.contains('is-open') ||
+          form.elements.idempotency_key.value !== formRequestId ||
+          !ensureConfiguredMetaPixel(config.pixelId)
+        ) return;
+
+        const items = checkoutContext.mode === 'cart'
+          ? checkoutContext.items.map((item) => ({ id: String(item.variantId), quantity: Number(item.quantity || 1) }))
+          : [{ id: String(currentVariantId() || ''), quantity: Number(quantityInput?.value || 1) }];
+        const validItems = items.filter((item) => item.id && item.quantity > 0);
+        const subtotal = checkoutContext.mode === 'cart'
+          ? Number(checkoutContext.subtotalCents || 0) / 100
+          : Number(variantData[currentVariantId()]?.price || 0) / 100 * Number(quantityInput?.value || 1);
+        const total = subtotal + shippingFee();
+
+        window.fbq('trackSingle', config.pixelId, 'InitiateCheckout', {
+          currency: 'MAD',
+          ...(Number.isFinite(total) && total >= 0 ? { value: Math.round(total * 100) / 100 } : {}),
+          content_type: 'product',
+          content_ids: validItems.map((item) => item.id),
+          contents: validItems
+        });
       }
 
       function ensureConfiguredMetaPixel(pixelId) {
@@ -1311,7 +1389,7 @@ function setCheckoutContext(context = {}) {
           if (
             meta.browserEnabled &&
             meta.pixelId &&
-            analyticsProcessingAllowed() &&
+            marketingProcessingAllowed() &&
             ensureConfiguredMetaPixel(meta.pixelId)
           ) {
             window.fbq(
@@ -1373,6 +1451,9 @@ function setCheckoutContext(context = {}) {
   form.elements.form_started_at.value = String(Date.now());
   form.elements.idempotency_key.value = createRequestId();
   form.dataset.started = '';
+
+  void getMetaBrowserConfig();
+  void loadMarketingPrivacyApi();
 
   overlay.classList.add('is-open');
   overlay.setAttribute('aria-hidden', 'false');
@@ -1502,6 +1583,8 @@ document.addEventListener('variant:change', () => {
               ? checkoutContext.items.length
               : 1
         });
+
+        void publishMetaInitiateCheckout().catch(() => {});
       });
 
       form.addEventListener('submit', async (event) => {
