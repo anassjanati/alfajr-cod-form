@@ -50,12 +50,19 @@ browser Meta event. The block loads Shopify's `consent-tracking-api` using
 `Shopify.loadFeatures` before making that decision. The server `Purchase` delivery remains best-effort as
 before; review CAPI consent handling separately for stores in regulated regions.
 
+If a visitor starts filling the form before granting marketing consent, a
+`visitorConsentCollected` event rechecks permission and retries
+`InitiateCheckout` once, provided the same form is still open. No checkout
+event is sent merely because consent changes before the visitor starts typing.
+
 To test after deploying **both the server app and theme app extension**:
 
 1. Open the storefront and enable marketing consent where required.
 2. Open the COD modal and start typing in the customer fields.
 3. In Meta Events Manager → Test Events, verify one `InitiateCheckout` for the
    configured Pixel (no event before input, no duplicates for subsequent typing).
+   Test the case where the visitor starts typing with marketing consent denied,
+   then grants consent while the form remains open: expect exactly one event.
 4. Submit one real test COD order and verify `Purchase` has matching browser
    and CAPI event IDs. Re-test with marketing consent denied; no browser Meta
    events should be sent.
