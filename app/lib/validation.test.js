@@ -18,6 +18,13 @@ describe("COD order validation", () => {
     expect(result.success).toBe(true);
     expect(result.data).toBeDefined();
     expect(result.errors).toBeNull();
+    expect(result.data.marketingAllowed).toBe(false);
+  });
+
+  it("preserves explicit boolean marketing permission and rejects strings", () => {
+    expect(validateCodOrder({ ...validData, marketingAllowed: true }).data.marketingAllowed).toBe(true);
+    expect(validateCodOrder({ ...validData, marketingAllowed: false }).data.marketingAllowed).toBe(false);
+    expect(validateCodOrder({ ...validData, marketingAllowed: "true" }).success).toBe(false);
   });
 
   it("does not require or trust a client-provided shop", () => {
