@@ -17,6 +17,7 @@
   class="alfajr-cod-v2"
   data-alfajr-cod-root="{{ block.id }}"
   data-default-variant="{{ product.selected_or_first_available_variant.id }}"
+  data-cod-proxy-subpath="{{ block.settings.proxy_subpath | default: 'alfajr-cod' | escape }}"
 >
   <button type="button" class="alfajr-cod-v2__open" data-cod-open>
     <span aria-hidden="true">{{ alfajr_button_icon }}</span>
@@ -747,6 +748,10 @@
        * context, so the COD modal always appears above the sticky header.
        */
       const blockId = root.getAttribute('data-alfajr-cod-root');
+      const proxySubpath = root.dataset.codProxySubpath || 'alfajr-cod';
+      const proxyBasePath = /^[a-zA-Z0-9_-]{1,30}$/.test(proxySubpath)
+        ? `/apps/${proxySubpath}`
+        : '/apps/alfajr-cod';
       document.querySelectorAll('[data-alfajr-cod-portal]').forEach((node) => {
         if (node.getAttribute('data-alfajr-cod-portal') === blockId) {
           node.remove();
@@ -1273,7 +1278,7 @@ function setCheckoutContext(context = {}) {
 
       function getMetaBrowserConfig() {
         if (!metaBrowserConfigPromise) {
-          metaBrowserConfigPromise = fetch('/apps/alfajr-cod/api/meta-config', {
+          metaBrowserConfigPromise = fetch(`${proxyBasePath}/api/meta-config`, {
             credentials: 'same-origin',
             cache: 'no-store'
           })
@@ -1656,7 +1661,7 @@ if (!isCartCheckout && !payload.variantId) {
         let rotateRequestId = false;
 
         try {
-          const response = await fetch('/apps/alfajr-cod/api/cod', {
+          const response = await fetch(`${proxyBasePath}/api/cod`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
@@ -1717,6 +1722,12 @@ if (!isCartCheckout && !payload.variantId) {
       "id": "title",
       "label": "Popup title",
       "default": "Commander rapidement"
+    },
+    {
+      "type": "text",
+      "id": "proxy_subpath",
+      "label": "Advanced: app proxy subpath",
+      "default": "alfajr-cod"
     },
     {
       "type": "text",
