@@ -1,0 +1,59 @@
+# Local development-only config for the isolated Shopify app.
+# The URLs are placeholders until a separate staging backend/tunnel is ready.
+# Do not deploy this configuration as-is or use it with the production shop.
+
+client_id = "75740825761817d161b2b625e58d018c"
+name = "alfajr-cod-form-staging"
+application_url = "https://example.com"
+embedded = true
+
+[build]
+automatically_update_urls_on_dev = true
+# Select the development store explicitly with `shopify app dev --store ...`.
+
+[webhooks]
+api_version = "2026-07"
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/scopes_update"
+  topics = ["app/scopes_update"]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/uninstalled"
+  topics = ["app/uninstalled"]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/orders_update"
+  topics = ["orders/updated"]
+
+[access_scopes]
+scopes = "read_orders,write_metaobject_definitions,write_metaobjects,write_orders,write_products,write_draft_orders,write_app_proxy"
+
+[auth]
+redirect_urls = ["https://example.com/auth/callback"]
+
+[app_proxy]
+url = "https://example.com"
+subpath = "alfajr-cod-staging"
+prefix = "apps"
+
+[product.metafields.app.demo_info]
+type = "single_line_text_field"
+name = "Demo Source Info"
+description = "Tracks products created by the Shopify app template for development"
+
+  [product.metafields.app.demo_info.access]
+  admin = "merchant_read_write"
+
+[metaobjects.app.example]
+name = "Example"
+
+  [metaobjects.app.example.access]
+  admin = "merchant_read_write"
+
+[metaobjects.app.example.fields.title]
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.example.fields.description]
+type = "multi_line_text_field"
