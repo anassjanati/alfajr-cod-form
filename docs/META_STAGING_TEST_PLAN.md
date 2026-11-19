@@ -12,7 +12,7 @@ start staging: it identifies the production Shopify app and the live
 | Shopify store | A separate Shopify development store, never the live merchant store |
 | Shopify app | A separate app/client ID linked to the staging store |
 | Backend | A separate HTTPS staging URL and isolated database |
-| App proxy | Same storefront subpath (`/apps/alfajr-cod`) but pointing to the staging backend, **only on the staging store** |
+| App proxy | Dedicated `/apps/alfajr-cod-staging` so the staging app does not collide with the original app already installed on the development store |
 | Theme extension | Deploy and enable this PR's COD block only in the staging store's test theme |
 | Meta | A dedicated test Pixel/dataset, isolated CAPI token and `META_TEST_EVENT_CODE`; never the production Pixel or token |
 | Test products | Test variants and shipping configuration in the staging store |
@@ -20,6 +20,10 @@ start staging: it identifies the production Shopify app and the live
 The staging app configuration must have its own `client_id`,
 `application_url`, `auth.redirect_urls` and `app_proxy.url`. Store staging
 secrets in its runtime's secret manager; never commit them to GitHub.
+For the staging app block in the development theme editor, set the advanced
+**app proxy subpath** field to `alfajr-cod-staging`; the default `alfajr-cod`
+remains unchanged for the original app. Check both app blocks if they appear
+in the theme to avoid placing a duplicate COD checkout button on one page.
 Use an isolated database because the app handles app sessions, Meta settings,
 idempotency keys and COD order records.
 
@@ -38,7 +42,7 @@ configuration change is part of this Draft PR.
    `Shopify.customerPrivacy.marketingAllowed()` actually returns in each case.
 3. In Meta Events Manager's **Test events** panel, use the staging Pixel's
    test event code in staging server settings; use browser devtools to check
-   outgoing requests to Meta and `/apps/alfajr-cod/api/cod`.
+   outgoing requests to Meta and `/apps/alfajr-cod-staging/api/cod`.
 4. Confirm the Shopify order will be a test order in the **development store**;
    do not use a real customer phone/email or a live inventory item.
 
