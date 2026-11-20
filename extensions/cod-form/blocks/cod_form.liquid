@@ -1161,9 +1161,11 @@ function setCheckoutContext(context = {}) {
       }
 
       function emitEvent(name, detail = {}) {
-        window.dataLayer?.push?.({ event: name, ...detail });
-        if (typeof window.fbq === 'function' && marketingProcessingAllowed()) {
-          window.fbq('trackCustom', name, detail);
+        if (marketingProcessingAllowed()) {
+          window.dataLayer?.push?.({ event: name, ...detail });
+          if (typeof window.fbq === 'function') {
+            window.fbq('trackCustom', name, detail);
+          }
         }
         document.dispatchEvent(new CustomEvent(name, { detail }));
       }
@@ -1211,6 +1213,8 @@ function setCheckoutContext(context = {}) {
       }
 
       function trackingData() {
+        if (!marketingProcessingAllowed()) return {};
+
         const params = new URLSearchParams(location.search);
         const stored = readStoredJson(TRACKING_STORAGE_KEY);
         const fbclid = params.get('fbclid') || stored.fbclid || '';
@@ -1429,10 +1433,12 @@ function setCheckoutContext(context = {}) {
           }
         }
 
-        window.dataLayer?.push?.({
-          event: 'alfajr_cod_purchase',
-          ...purchase
-        });
+        if (marketingProcessingAllowed()) {
+          window.dataLayer?.push?.({
+            event: 'alfajr_cod_purchase',
+            ...purchase
+          });
+        }
         document.dispatchEvent(new CustomEvent('alfajr_cod_purchase', { detail: purchase }));
 
         try {
