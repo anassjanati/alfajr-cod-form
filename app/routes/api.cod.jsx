@@ -306,10 +306,10 @@ export async function action({ request }) {
         eventName: "Purchase",
         serverSent: false,
         browserEnabled: Boolean(
-          metaConfig.configured && metaConfig.browserPixelEnabled,
+          metaConfig.configured && metaConfig.browserPixelEnabled && data.marketingAllowed,
         ),
         pixelId:
-          metaConfig.configured && metaConfig.browserPixelEnabled
+          metaConfig.configured && metaConfig.browserPixelEnabled && data.marketingAllowed
             ? metaConfig.pixelId
             : undefined,
         contentIds: metaContents.map((item) => item.id),
@@ -340,6 +340,7 @@ export async function action({ request }) {
     }
 
     const metaResult = await sendMetaPurchase({
+      marketingAllowed: data.marketingAllowed,
       eventId: metaEventId,
       orderId: finalOrder.id,
       value: successResponse.order.total,

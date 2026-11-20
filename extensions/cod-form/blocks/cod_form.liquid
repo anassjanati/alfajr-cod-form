@@ -17,6 +17,7 @@
   class="alfajr-cod-v2"
   data-alfajr-cod-root="{{ block.id }}"
   data-default-variant="{{ product.selected_or_first_available_variant.id }}"
+  data-cod-proxy-subpath="{{ block.settings.proxy_subpath | default: 'alfajr-cod' | escape }}"
 >
   <button type="button" class="alfajr-cod-v2__open" data-cod-open>
     <span aria-hidden="true">{{ alfajr_button_icon }}</span>
@@ -167,26 +168,26 @@
                   required
                 >
                 <datalist id="alfajr-cities-{{ block.id }}">
-                  <option value="Fès">
-                  <option value="Casablanca">
-                  <option value="Rabat">
-                  <option value="Marrakech">
-                  <option value="Tanger">
-                  <option value="Agadir">
-                  <option value="Meknès">
-                  <option value="Oujda">
-                  <option value="Kénitra">
-                  <option value="Tétouan">
-                  <option value="Safi">
-                  <option value="El Jadida">
-                  <option value="Nador">
-                  <option value="Béni Mellal">
-                  <option value="Taza">
-                  <option value="Settat">
-                  <option value="Khouribga">
-                  <option value="Errachidia">
-                  <option value="Laâyoune">
-                  <option value="Dakhla">
+                  <option value="Fès"></option>
+                  <option value="Casablanca"></option>
+                  <option value="Rabat"></option>
+                  <option value="Marrakech"></option>
+                  <option value="Tanger"></option>
+                  <option value="Agadir"></option>
+                  <option value="Meknès"></option>
+                  <option value="Oujda"></option>
+                  <option value="Kénitra"></option>
+                  <option value="Tétouan"></option>
+                  <option value="Safi"></option>
+                  <option value="El Jadida"></option>
+                  <option value="Nador"></option>
+                  <option value="Béni Mellal"></option>
+                  <option value="Taza"></option>
+                  <option value="Settat"></option>
+                  <option value="Khouribga"></option>
+                  <option value="Errachidia"></option>
+                  <option value="Laâyoune"></option>
+                  <option value="Dakhla"></option>
                 </datalist>
                 <small data-error-for="city"></small>
               </div>
@@ -747,6 +748,10 @@
        * context, so the COD modal always appears above the sticky header.
        */
       const blockId = root.getAttribute('data-alfajr-cod-root');
+      const proxySubpath = root.dataset.codProxySubpath || 'alfajr-cod';
+      const proxyBasePath = /^[a-zA-Z0-9_-]{1,30}$/.test(proxySubpath)
+        ? `/apps/${proxySubpath}`
+        : '/apps/alfajr-cod';
       document.querySelectorAll('[data-alfajr-cod-portal]').forEach((node) => {
         if (node.getAttribute('data-alfajr-cod-portal') === blockId) {
           node.remove();
@@ -1156,9 +1161,11 @@ function setCheckoutContext(context = {}) {
       }
 
       function emitEvent(name, detail = {}) {
-        window.dataLayer?.push?.({ event: name, ...detail });
-        if (typeof window.fbq === 'function') {
-          window.fbq('trackCustom', name, detail);
+        if (marketingProcessingAllowed()) {
+          window.dataLayer?.push?.({ event: name, ...detail });
+          if (typeof window.fbq === 'function') {
+            window.fbq('trackCustom', name, detail);
+          }
         }
         document.dispatchEvent(new CustomEvent(name, { detail }));
       }
@@ -1206,6 +1213,8 @@ function setCheckoutContext(context = {}) {
       }
 
       function trackingData() {
+        if (!marketingProcessingAllowed()) return {};
+
         const params = new URLSearchParams(location.search);
         const stored = readStoredJson(TRACKING_STORAGE_KEY);
         const fbclid = params.get('fbclid') || stored.fbclid || '';
@@ -1231,16 +1240,96 @@ function setCheckoutContext(context = {}) {
         return tracking;
       }
 
-      function analyticsProcessingAllowed() {
+      function marketingProcessingAllowed() {
         try {
           const privacy = window.Shopify?.customerPrivacy;
-          if (typeof privacy?.analyticsProcessingAllowed === 'function') {
-            return privacy.analyticsProcessingAllowed();
+          if (typeof privacy?.marketingAllowed === 'function') {
+            return privacy.marketingAllowed();
           }
         } catch (_) {
-          // Shopify privacy API may not be available on every storefront.
+          return false;
         }
-        return true;
+        return false;
+      }
+
+      let marketingPrivacyReadyPromise;
+
+      function loadMarketingPrivacyApi() {
+        if (!marketingPrivacyReadyPromise) {
+          marketingPrivacyReadyPromise = new Promise((resolve) => {
+            if (typeof window.Shopify?.customerPrivacy?.marketingAllowed === 'function') {
+              resolve(true);
+              return;
+            }
+            if (typeof window.Shopify?.loadFeatures !== 'function') {
+              resolve(false);
+              return;
+            }
+            try {
+              window.Shopify.loadFeatures(
+                [{ name: 'consent-tracking-api', version: '1.0' }],
+                (error) => resolve(!error && typeof window.Shopify?.customerPrivacy?.marketingAllowed === 'function')
+              );
+            } catch (_) {
+              resolve(false);
+            }
+          });
+        }
+        return marketingPrivacyReadyPromise;
+      }
+
+      let metaBrowserConfigPromise;
+
+      function getMetaBrowserConfig() {
+        if (!metaBrowserConfigPromise) {
+          metaBrowserConfigPromise = fetch(`${proxyBasePath}/api/meta-config`, {
+            credentials: 'same-origin',
+            cache: 'no-store'
+          })
+            .then((response) => response.ok ? response.json() : null)
+            .then((config) => ({
+              browserEnabled: config?.browserEnabled === true && /^\d{5,30}$/.test(String(config.pixelId || '')),
+              pixelId: String(config?.pixelId || '')
+            }))
+            .catch(() => ({ browserEnabled: false }));
+        }
+        return metaBrowserConfigPromise;
+      }
+
+      async function publishMetaInitiateCheckout() {
+        const formRequestId = form.elements.idempotency_key.value;
+        if (!formRequestId) return;
+
+        const [config, privacyReady] = await Promise.all([
+          getMetaBrowserConfig(), loadMarketingPrivacyApi()
+        ]);
+        if (
+          !privacyReady ||
+          !config.browserEnabled ||
+          !marketingProcessingAllowed() ||
+          !overlay.classList.contains('is-open') ||
+          form.elements.idempotency_key.value !== formRequestId ||
+          form.dataset.metaInitiated === formRequestId ||
+          !ensureConfiguredMetaPixel(config.pixelId)
+        ) return;
+
+        const items = checkoutContext.mode === 'cart'
+          ? checkoutContext.items.map((item) => ({ id: String(item.variantId), quantity: Number(item.quantity || 1) }))
+          : [{ id: String(currentVariantId() || ''), quantity: Number(quantityInput?.value || 1) }];
+        const validItems = items.filter((item) => item.id && item.quantity > 0);
+        const subtotal = checkoutContext.mode === 'cart'
+          ? Number(checkoutContext.subtotalCents || 0) / 100
+          : Number(variantData[currentVariantId()]?.price || 0) / 100 * Number(quantityInput?.value || 1);
+        const total = subtotal + shippingFee();
+
+        form.dataset.metaInitiated = formRequestId;
+        window.fbq('trackSingle', config.pixelId, 'InitiateCheckout', {
+          currency: 'MAD',
+          ...(Number.isFinite(total) && total >= 0 ? { value: Math.round(total * 100) / 100 } : {}),
+          content_type: 'product',
+          content_ids: validItems.map((item) => item.id),
+          contents: validItems
+        });
       }
 
       function ensureConfiguredMetaPixel(pixelId) {
@@ -1311,7 +1400,7 @@ function setCheckoutContext(context = {}) {
           if (
             meta.browserEnabled &&
             meta.pixelId &&
-            analyticsProcessingAllowed() &&
+            marketingProcessingAllowed() &&
             ensureConfiguredMetaPixel(meta.pixelId)
           ) {
             window.fbq(
@@ -1344,10 +1433,12 @@ function setCheckoutContext(context = {}) {
           }
         }
 
-        window.dataLayer?.push?.({
-          event: 'alfajr_cod_purchase',
-          ...purchase
-        });
+        if (marketingProcessingAllowed()) {
+          window.dataLayer?.push?.({
+            event: 'alfajr_cod_purchase',
+            ...purchase
+          });
+        }
         document.dispatchEvent(new CustomEvent('alfajr_cod_purchase', { detail: purchase }));
 
         try {
@@ -1373,6 +1464,10 @@ function setCheckoutContext(context = {}) {
   form.elements.form_started_at.value = String(Date.now());
   form.elements.idempotency_key.value = createRequestId();
   form.dataset.started = '';
+  form.dataset.metaInitiated = '';
+
+  void getMetaBrowserConfig();
+  void loadMarketingPrivacyApi();
 
   overlay.classList.add('is-open');
   overlay.setAttribute('aria-hidden', 'false');
@@ -1502,6 +1597,13 @@ document.addEventListener('variant:change', () => {
               ? checkoutContext.items.length
               : 1
         });
+
+        void publishMetaInitiateCheckout().catch(() => {});
+      });
+
+      document.addEventListener('visitorConsentCollected', () => {
+        if (!form.dataset.started || !overlay.classList.contains('is-open')) return;
+        void publishMetaInitiateCheckout().catch(() => {});
       });
 
       form.addEventListener('submit', async (event) => {
@@ -1538,6 +1640,7 @@ const payload = {
   website: form.elements.website?.value || '',
   formStartedAt: Number(form.elements.form_started_at.value || Date.now()),
   idempotencyKey: requestId,
+  marketingAllowed: marketingProcessingAllowed() === true,
   ...trackingData()
 };
 
@@ -1564,7 +1667,7 @@ if (!isCartCheckout && !payload.variantId) {
         let rotateRequestId = false;
 
         try {
-          const response = await fetch('/apps/alfajr-cod/api/cod', {
+          const response = await fetch(`${proxyBasePath}/api/cod`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
@@ -1625,6 +1728,12 @@ if (!isCartCheckout && !payload.variantId) {
       "id": "title",
       "label": "Popup title",
       "default": "Commander rapidement"
+    },
+    {
+      "type": "text",
+      "id": "proxy_subpath",
+      "label": "Advanced: app proxy subpath",
+      "default": "alfajr-cod"
     },
     {
       "type": "text",

@@ -32,6 +32,7 @@ const CodOrderSchema = z
     idempotencyKey: z.string().trim().min(16).max(128).optional(),
     formStartedAt: z.coerce.number().int().positive().optional(),
     website: z.string().trim().max(200).optional().or(z.literal("")),
+    marketingAllowed: z.boolean().default(false),
 
     utmSource: OptionalTrackingString,
     utmMedium: OptionalTrackingString,

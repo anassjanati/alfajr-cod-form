@@ -79,6 +79,7 @@ describe("Meta Conversions API service", () => {
 
     const result = await sendMetaPurchase(
       {
+        marketingAllowed: true,
         eventId: "event-2",
         orderId: "order-2",
         value: 70,
@@ -106,5 +107,22 @@ describe("Meta Conversions API service", () => {
     expect(url.pathname).toBe("/v25.0/123456/events");
     expect(url.searchParams.get("access_token")).toBe("secret-token");
     expect(JSON.parse(options.body).test_event_code).toBe("TEST123");
+  });
+
+  it("never calls Meta CAPI when marketing permission is missing or denied", async () => {
+    const fetchImpl = vi.fn();
+    const config = { pixelId: "123456", accessToken: "secret-token" };
+
+    for (const marketingAllowed of [undefined, false, "true"]) {
+      const result = await sendMetaPurchase(
+        { eventId: "denied-event", marketingAllowed, phone: "0612345678" },
+        { config, fetchImpl },
+      );
+
+      expect(result.sent).toBe(false);
+      expect(result.reason).toBe("marketing_consent_not_allowed");
+    }
+
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 });

@@ -170,6 +170,15 @@ export async function sendMetaPurchase(
     };
   }
 
+  if (input.marketingAllowed !== true) {
+    return {
+      sent: false,
+      configured: true,
+      reason: "marketing_consent_not_allowed",
+      eventId: input.eventId,
+    };
+  }
+
   if (typeof fetchImpl !== "function") {
     return {
       sent: false,
